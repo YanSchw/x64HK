@@ -8,11 +8,15 @@ BUILD_DIR  ?= $(BUILD_ROOT)
 KERNEL64 := $(BUILD_DIR)/Kernel.elf64
 KERNEL32 := $(BUILD_DIR)/Kernel.elf
 
-CXX ?= clang++
+ifeq ($(origin CXX),default)
+	CXX := $(if $(shell command -v clang++ 2>/dev/null),clang++,g++)
+endif
 ifeq ($(CXX),c++)
 	CXX := clang++
 endif
 ASM := nasm
+
+IS_CLANG := $(findstring clang,$(shell $(CXX) --version 2>/dev/null))
 
 # Prefer the LLVM binutils when they are on PATH (they cross-target out of the box,
 # unlike Apple's cctools).
@@ -32,9 +36,16 @@ CXXFLAGS_BASE  := -std=c++23 -m64 -I. -I$(SRC_DIR) -ffreestanding -nostdinc -nos
                   -mno-red-zone -mno-mmx -mno-sse -mgeneral-regs-only -mcx16 \
                   -g -gdwarf-4 -MMD -MP
 CXXFLAGS_WARN  := -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-variable \
-                  -Wno-non-virtual-dtor -Wno-unused-const-variable \
-                  -Wno-unused-private-field -Wno-implicit-exception-spec-mismatch \
-                  -Wno-unused-command-line-argument
+                  -Wno-non-virtual-dtor
+ifeq (,$(IS_CLANG))
+	# Hardware register layouts deliberately name a bitfield after the enum that
+	# types it (`Granularity Granularity : 1`), which GCC rejects by default.
+	CXXFLAGS_WARN += -Wno-changes-meaning -Wno-unused-const-variable
+else
+	CXXFLAGS_WARN += -Wno-unused-const-variable \
+	                 -Wno-unused-private-field -Wno-implicit-exception-spec-mismatch \
+	                 -Wno-unused-command-line-argument
+endif
 CXXFLAGS_OPT   ?= -O2 -fomit-frame-pointer
 
 ifeq ($(shell uname),Darwin)

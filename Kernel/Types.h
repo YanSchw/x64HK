@@ -54,8 +54,13 @@ constexpr size_t GIB = 1024 * MIB;
 // Scoped enums are used heavily for hardware register fields; this is the
 // std::to_underlying equivalent for a freestanding build.
 template <typename EnumType>
-constexpr __underlying_type(EnumType) ToUnderlying(EnumType InValue) {
-    return static_cast<__underlying_type(EnumType)>(InValue);
+struct UnderlyingType {
+    using Type = __underlying_type(EnumType);
+};
+
+template <typename EnumType>
+constexpr typename UnderlyingType<EnumType>::Type ToUnderlying(EnumType InValue) {
+    return static_cast<typename UnderlyingType<EnumType>::Type>(InValue);
 }
 
 template <typename T, size_t N>

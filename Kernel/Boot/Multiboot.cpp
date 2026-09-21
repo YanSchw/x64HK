@@ -2,8 +2,10 @@
 #include "Debug/Output.h"
 
 // Written by Boot/Entry.asm from eax/ebx before anything else runs.
-extern "C" uint32_t MultibootMagic = 0;
-extern "C" uint32_t MultibootInfo = 0;
+extern "C" {
+uint32_t MultibootMagic = 0;
+uint32_t MultibootInfo = 0;
+}
 
 namespace Multiboot {
 

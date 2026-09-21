@@ -9,9 +9,15 @@
 // Entry.asm grabs its slice with a 32-bit `lock xadd` on CoreStackPointer. That
 // is a 32-bit operation on a 64-bit pointer, which is only safe because the
 // kernel is linked below 4 GiB, so the upper half of the pointer is always zero.
-extern "C" const uint32_t CoreStackSize = Config::BOOT_STACK_SIZE;
 alignas(16) static uint8_t s_CoreStacks[Config::MAX_CORES * Config::BOOT_STACK_SIZE];
-extern "C" uint8_t* CoreStackPointer = s_CoreStacks;
+
+extern "C" {
+// `extern` is load bearing here: a namespace scope const would otherwise have
+// internal linkage and Entry.asm could not see it.
+extern const uint32_t CoreStackSize;
+const uint32_t CoreStackSize = Config::BOOT_STACK_SIZE;
+uint8_t* CoreStackPointer = s_CoreStacks;
+}
 
 namespace Cpu {
 

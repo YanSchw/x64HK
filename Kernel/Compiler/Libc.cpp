@@ -38,4 +38,6 @@ extern "C" int __cxa_atexit(void (*InFunction)(void*), void* InArgument, void* I
     return 0;
 }
 
-extern "C" void* __dso_handle = nullptr;
+extern "C" {
+void* __dso_handle = nullptr;
+}

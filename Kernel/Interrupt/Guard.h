@@ -29,13 +29,13 @@ struct Vault {
 /// that piled up in the meantime.
 class Guarded {
 public:
-    explicit Guarded(Vault& InVault) : m_Vault(InVault) {}
+    explicit Guarded(struct Vault& InVault) : m_Vault(InVault) {}
     ~Guarded();
 
     Guarded(const Guarded&) = delete;
     Guarded& operator=(const Guarded&) = delete;
 
-    Vault& Vault() { return m_Vault; }
+    struct Vault& Vault() { return m_Vault; }
     const struct Vault& Vault() const { return m_Vault; }
 
 private:
