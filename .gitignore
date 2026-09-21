@@ -1,0 +1,5 @@
+Build/
+compile_commands.json
+*.o
+*.d
+.DS_Store

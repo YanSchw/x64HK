@@ -1,0 +1,10 @@
+CompileFlags:
+  Add:
+    - -std=c++23
+    - -ffreestanding
+    - -nostdinc
+    - -I.
+    - --target=x86_64-pc-linux-gnu
+  Remove:
+    - -m*
+    - -f*
