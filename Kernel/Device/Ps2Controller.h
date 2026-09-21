@@ -41,8 +41,9 @@ void Initialize();
 /// controller keeps the line asserted and re-raises the interrupt immediately.
 void DrainToQueue();
 
-/// Epilogue half: decodes one buffered byte.
-/// Returns true when OutKey holds a complete keystroke.
+/// Epilogue half: decodes buffered bytes until one yields a Key, skipping the
+/// command acknowledgements that share the stream. False means the queue ran
+/// dry; OutKey can still be invalid when the byte only advanced a sequence.
 bool Fetch(Key& OutKey);
 
 void SetLed(Led InLed, bool InOn);

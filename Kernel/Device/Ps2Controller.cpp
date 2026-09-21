@@ -189,22 +189,24 @@ void DrainToQueue() {
 }
 
 bool Fetch(Key& OutKey) {
-    uint8_t code = 0;
-    {
-        Cpu::Interrupt::Guard interruptGuard;
-        SpinLock::Scope lockGuard(s_RawLock);
-        if (!s_RawBytes.Consume(code)) {
-            return false;
+    while (true) {
+        uint8_t code = 0;
+        {
+            Cpu::Interrupt::Guard interruptGuard;
+            SpinLock::Scope lockGuard(s_RawLock);
+            if (!s_RawBytes.Consume(code)) {
+                return false;
+            }
         }
-    }
 
-    // Command acknowledgements share the byte stream with scan codes.
-    if (code == Reply::ACKNOWLEDGE || code == Reply::RESEND) {
-        return false;
-    }
+        // Command acknowledgements share the byte stream with scan codes.
+        if (code == Reply::ACKNOWLEDGE || code == Reply::RESEND) {
+            continue;
+        }
 
-    OutKey = s_Decoder.Decode(code);
-    return true;
+        OutKey = s_Decoder.Decode(code);
+        return true;
+    }
 }
 
 void SetLed(Led InLed, bool InOn) {
