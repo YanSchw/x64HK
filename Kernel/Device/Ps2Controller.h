@@ -46,6 +46,12 @@ void DrainToQueue();
 /// dry; OutKey can still be invalid when the byte only advanced a sequence.
 bool Fetch(Key& OutKey);
 
+#ifdef TEST
+/// Test seam: pushes a byte into the raw queue exactly as the prologue would,
+/// so the decode path can be exercised without anyone touching a keyboard.
+void InjectForTest(uint8_t InCode);
+#endif
+
 void SetLed(Led InLed, bool InOn);
 void SetRepeatRate(Speed InSpeed, Delay InDelay);
 

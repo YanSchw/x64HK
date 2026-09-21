@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A new push supersedes whatever is still running for the same branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang lld llvm nasm
+
+      - name: Check indentation
+        run: ./Tools/Untabify.sh --check
+
+      - name: Build
+        run: make
+
+      - name: Build optimised
+        run: make all-opt
+
+      - name: Build debug
+        run: make all-dbg
+
+      - name: Upload kernel
+        uses: actions/upload-artifact@v6
+        with:
+          name: kernel
+          path: |
+            Build/Kernel.elf
+            Build/Kernel.elf64
+          if-no-files-found: error
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang lld llvm nasm qemu-system-x86
+
+      # No KVM on a hosted runner, so everything runs under TCG. Tools/RunTests.sh
+      # asks for it explicitly and never touches an audio backend, which a runner
+      # has not got.
+      # Tools/RunTests.sh prints the guest's serial output, so a failure shows
+      # up in this job's log without an artifact.
+      - name: Run test suites
+        run: make test

@@ -17,6 +17,9 @@
 #include "Device/TextStream.h"
 #include "Interrupt/Guard.h"
 #include "Memory/Heap.h"
+#ifdef TEST
+#include "Test/Test.h"
+#endif
 
 // Screen layout: the shared Vault window owns the top four rows, the rest is a
 // two-by-four grid of per-core debug windows. One window per core is what keeps
@@ -57,6 +60,17 @@ extern "C" int Main() {
     const bool timerReady = LocalApic::Timer::Setup(Config::SCHEDULER_TICK_MS * 1000);
     ASSERT(timerReady);
 
+#ifdef TEST
+    // The suites that need nothing but the heap run while this is still the
+    // only core; the ones that need threads run on the runner instead of the
+    // demo threads, and it ends the emulator when it is done.
+    Test::RunUnitSuites();
+
+    {
+        Guarded guard = Guard::Enter();
+        guard.Vault().Scheduler.Ready(&Test::Runner());
+    }
+#else
     {
         Guarded guard = Guard::Enter();
         Scheduler& scheduler = guard.Vault().Scheduler;
@@ -65,6 +79,7 @@ extern "C" int Main() {
         scheduler.Ready(&s_Keyboard);
         scheduler.Ready(&s_Melody);
     }
+#endif
 
     // Interrupts must still be off here: a Startup-IPI that gets interrupted
     // halfway can leave the LAPIC waiting for an end-of-interrupt that never

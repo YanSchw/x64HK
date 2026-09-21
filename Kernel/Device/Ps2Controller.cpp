@@ -209,6 +209,14 @@ bool Fetch(Key& OutKey) {
     }
 }
 
+#ifdef TEST
+void InjectForTest(uint8_t InCode) {
+    Cpu::Interrupt::Guard interruptGuard;
+    SpinLock::Scope lockGuard(s_RawLock);
+    s_RawBytes.Produce(InCode);
+}
+#endif
+
 void SetLed(Led InLed, bool InOn) {
     if (InOn) {
         s_Leds |= ToUnderlying(InLed);

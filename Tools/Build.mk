@@ -51,6 +51,8 @@ CXXFLAGS_OPT   ?= -O2 -fomit-frame-pointer
 ifeq ($(shell uname),Darwin)
 	CXXFLAGS_BASE += --target=x86_64-pc-linux-gnu
 	LDFLAGS_EXTRA += -fuse-ld=lld
+else ifneq (,$(shell command -v ld.lld 2>/dev/null))
+	LDFLAGS_EXTRA += -fuse-ld=lld
 endif
 
 CXXFLAGS := $(CXXFLAGS_BASE) $(CXXFLAGS_WARN) $(CXXFLAGS_OPT)
@@ -59,6 +61,12 @@ LDFLAGS  := $(LDFLAGS_EXTRA) -Wl,-T,$(LINKER_SCRIPT) -Wl,--build-id=none -Wl,-z,
 
 CPP_SOURCES := $(shell find $(SRC_DIR) -name '*.cpp' -not -name '.*')
 ASM_SOURCES := $(shell find $(SRC_DIR) -name '*.asm' -not -name '.*')
+
+ifeq ($(TEST),1)
+	CXXFLAGS += -DTEST
+else
+	CPP_SOURCES := $(filter-out $(SRC_DIR)/Test/%,$(CPP_SOURCES))
+endif
 
 CPP_OBJECTS := $(addprefix $(BUILD_DIR)/,$(CPP_SOURCES:.cpp=.o))
 ASM_OBJECTS := $(addprefix $(BUILD_DIR)/,$(ASM_SOURCES:.asm=.asm.o))
@@ -99,6 +107,8 @@ clean::
 	$(VERBOSE) $(MAKE) BUILD_DIR="$(BUILD_ROOT)/Dbg" CXXFLAGS_OPT="-Og -fno-omit-frame-pointer" $*
 %-verbose:
 	$(VERBOSE) $(MAKE) BUILD_DIR="$(BUILD_ROOT)/Verbose" CXXFLAGS_OPT="-O1 -DVERBOSE" $*
+%-test:
+	$(VERBOSE) $(MAKE) BUILD_DIR="$(BUILD_ROOT)/Test" CXXFLAGS_OPT="-O1" TEST=1 $*
 
 MAKEFLAGS += --no-builtin-rules --no-print-directory
 .SUFFIXES:

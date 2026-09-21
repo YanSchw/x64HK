@@ -26,10 +26,11 @@ make qemu
 | `make qemu-iso` | Boot that ISO instead of the raw kernel |
 | `make usb USB_DEVICE=…` | Write the ISO to a USB device |
 | `make gdb` / `make connect-gdb` | Debug |
+| `make test` | Run the boot time test suites in QEMU on 1 and 4 cores |
 | `make clean` | Remove `Build/` |
 | `make help` | The full list |
 
-Every target has four flavours, each building into its own directory so they
+Every target has five flavours, each building into its own directory so they
 never collide:
 
 | Suffix | Flags |
@@ -38,6 +39,7 @@ never collide:
 | `-dbg` | `-Og -fno-omit-frame-pointer` |
 | `-noopt` | `-O0` |
 | `-verbose` | `-DVERBOSE`, enables the `DBG_VERBOSE` output |
+| `-test` | `-O1 -DTEST`, compiles `Kernel/Test` in |
 
 So `make qemu-dbg`, `make iso-opt`, `make qemu-serial-verbose`.
 
@@ -120,9 +122,30 @@ Kernel/
   Debug/         assertions, panic, per-core debug output
   Compiler/      global constructors, operator new/delete
   App/           the demo threads
+  Test/          boot time test suites, TEST builds only
 
 Tools/           Makefile fragments: build, image, QEMU
 ```
+
+## Testing
+
+```bash
+make test
+```
+
+Builds a `-test` flavour with `Kernel/Test` compiled in, boots it headless, and
+runs the suites: the pure ones on the bootstrap core before threading, the rest
+on a thread once the scheduler is up. The kernel reports through QEMU's
+`isa-debug-exit` device, so a failed check, a failed `ASSERT` or a panic all
+come back as a non-zero exit status.
+
+It runs twice, on one core and on four. A lock that only works uncontended and
+a scheduler that only works when something contends are both real failure modes,
+and neither shows up if you only ever test one of them.
+
+`TEST_CORES="1 2 8" make test` changes the core counts, `TEST_TIMEOUT=300`
+the per-run timeout. The timeout needs `timeout` or `gtimeout` on `PATH`
+(`brew install coreutils` on macOS)
 
 ## Configuration
 

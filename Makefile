@@ -25,7 +25,7 @@ help::
 	@printf '  %-14s %s\n' "all"    "Build the kernel ($(KERNEL32))"
 	@printf '  %-14s %s\n' "clean"  "Remove all build output"
 	@printf '  %-14s %s\n' "untabify" "Convert tabs in sources to 4 spaces"
-	@printf '\n  Every target has -opt / -noopt / -dbg / -verbose flavours,\n'
+	@printf '\n  Every target has -opt / -noopt / -dbg / -verbose / -test flavours,\n'
 	@printf '  e.g. `make qemu-dbg` or `make iso-opt`.\n\n'
 
 .PHONY: all help untabify untabify-check
