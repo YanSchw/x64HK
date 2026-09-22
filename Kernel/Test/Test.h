@@ -33,6 +33,9 @@ Thread& Runner();
 /// Prints the tally and exits the emulator. Never returns.
 [[noreturn]] void Finish();
 
+void RunFrameSuite();
+void RunFrameDrainSuite();
+void RunFrameStressSuite();
 void RunHeapSuite();
 void RunRingBufferSuite();
 void RunKeyDecoderSuite();

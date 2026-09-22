@@ -117,7 +117,7 @@ Kernel/
   Thread/        Thread, Dispatcher, Scheduler, IdleThread
   Sync/          SpinLock, TicketLock, Semaphore, Bellringer
   Device/        PS/2 keyboard and key decoding, text and serial streams
-  Memory/        buddy heap
+  Memory/        physical frame allocator, buddy heap
   Lib/           Queue, RingBuffer, PerCore, OutputStream, string functions
   Debug/         assertions, panic, per-core debug output
   Compiler/      global constructors, operator new/delete
@@ -139,14 +139,6 @@ on a thread once the scheduler is up. The kernel reports through QEMU's
 `isa-debug-exit` device, so a failed check, a failed `ASSERT` or a panic all
 come back as a non-zero exit status.
 
-It runs twice, on one core and on four. A lock that only works uncontended and
-a scheduler that only works when something contends are both real failure modes,
-and neither shows up if you only ever test one of them.
-
-`TEST_CORES="1 2 8" make test` changes the core counts, `TEST_TIMEOUT=300`
-the per-run timeout. The timeout needs `timeout` or `gtimeout` on `PATH`
-(`brew install coreutils` on macOS)
-
 ## Configuration
 
 `Kernel/Config.h` holds everything worth changing:
@@ -156,7 +148,8 @@ the per-run timeout. The timeout needs `timeout` or `gtimeout` on `PATH`
 | `MAX_CORES` | 8 | sizes every `PerCore<>` array |
 | `SCHEDULER_TICK_MS` | 10 | LAPIC timer period |
 | `THREAD_STACK_SIZE` | 16 KiB | interrupt frames land here too |
-| `HEAP_LOG2` | 24 | 16 MiB heap |
+| `HEAP_LOG2` | 24 | 16 MiB heap, taken from the frame allocator |
+| `IDENTITY_MAPPED_LIMIT` | 4 GiB | what the boot page tables reach, and so the frame allocator too |
 | `AP_TRAMPOLINE_ADDRESS` | `0x40000` | must be page aligned, below 1 MiB |
 
 ## Conventions
@@ -179,9 +172,9 @@ Four spaces for indentation, `Tools/Untabify.sh --check` fails if a tab creeps b
 ## Not there yet
 
 - No UEFI, no higher-half mapping, no virtual memory past the boot identity map
+- Physical memory above 4 GiB is reported but not used: the boot page tables
+  only identity map that far, so the frame allocator stops there
 - No user mode — everything runs in ring 0 and the GDT has no ring 3 segments
 - No FPU or SSE, so context switches never have to save vector state
 - One I/O APIC and flat logical APIC addressing, which caps `MAX_CORES` at 8
-- The heap is a fixed region in `.bss`; nothing consumes the Multiboot memory
-  map yet
 - No filesystem, no storage driver, no network

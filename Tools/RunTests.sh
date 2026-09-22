@@ -13,7 +13,7 @@ set -u
 
 usage() {
     cat <<USAGE
-Usage: Tools/RunTests.sh QEMU KERNEL [CORES] [TIMEOUT_SECONDS]
+Usage: Tools/RunTests.sh QEMU KERNEL [CORES] [MEMORY_MIB] [TIMEOUT_SECONDS]
 USAGE
     exit 2
 }
@@ -23,7 +23,8 @@ USAGE
 QEMU=$1
 KERNEL=$2
 CORES=${3:-4}
-TIMEOUT=${4:-120}
+MEMORY=${4:-512}
+TIMEOUT=${5:-120}
 
 EXIT_PASS=33
 EXIT_FAIL=35
@@ -54,7 +55,7 @@ else
     printf 'RunTests: no timeout command, a hung kernel will hang this run\n' >&2
 fi
 
-printf 'TEST  %s cores\n' "$CORES"
+printf 'TEST  %s cores, %s MiB\n' "$CORES" "$MEMORY"
 
 # Deliberately not the QEMU_FLAGS from Tools/Qemu.mk: those pull in an audio
 # backend for the PC speaker, and there is no sound daemon on a build runner.
@@ -63,7 +64,7 @@ $TIMEOUT_CMD "$QEMU" \
     -kernel "$KERNEL" \
     -display none \
     -serial "file:$LOG" \
-    -m 512 \
+    -m "$MEMORY" \
     -smp "$CORES" \
     -accel tcg,thread=multi \
     -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
@@ -76,21 +77,21 @@ status=$?
 
 case $status in
     "$EXIT_PASS")
-        printf 'PASS  %s cores\n\n' "$CORES"
+        printf 'PASS  %s cores, %s MiB\n\n' "$CORES" "$MEMORY"
         exit 0
         ;;
     "$EXIT_FAIL")
-        printf 'FAIL  %s cores: the kernel reported failed checks\n\n' "$CORES" >&2
+        printf 'FAIL  %s cores, %s MiB: failed checks\n\n' "$CORES" "$MEMORY" >&2
         ;;
     124 | 137)
-        printf 'FAIL  %s cores: no verdict within %ss, killed\n\n' "$CORES" "$TIMEOUT" >&2
+        printf 'FAIL  %s cores, %s MiB: no verdict within %ss, killed\n\n' "$CORES" "$MEMORY" "$TIMEOUT" >&2
         ;;
     0)
         # QEMU exited on its own, so the kernel never reached the exit device.
-        printf 'FAIL  %s cores: QEMU exited without a verdict\n\n' "$CORES" >&2
+        printf 'FAIL  %s cores, %s MiB: QEMU exited without a verdict\n\n' "$CORES" "$MEMORY" >&2
         ;;
     *)
-        printf 'FAIL  %s cores: QEMU exit status %s\n\n' "$CORES" "$status" >&2
+        printf 'FAIL  %s cores, %s MiB: QEMU exit status %s\n\n' "$CORES" "$MEMORY" "$status" >&2
         ;;
 esac
 

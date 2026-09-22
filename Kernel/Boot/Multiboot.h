@@ -58,6 +58,11 @@ const char* GetBootLoaderName();
 /// Physical address of the RSDP as reported by the loader, or 0.
 uintptr_t GetAcpiRsdp();
 
+/// The loader's own structures, one region at a time. Nothing here is copied
+/// out, so this memory has to stay reserved for as long as the accessors above
+/// are used. A region may be empty; false means there are no more.
+bool GetInfoRegion(unsigned InIndex, MemoryRegion& OutRegion);
+
 unsigned GetMemoryRegionCount();
 bool GetMemoryRegion(unsigned InIndex, MemoryRegion& OutRegion);
 

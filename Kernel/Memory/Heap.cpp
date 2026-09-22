@@ -1,8 +1,10 @@
 #include "Memory/Heap.h"
 #include "Config.h"
+#include "Memory/Frame.h"
 #include "Arch/CpuInterrupt.h"
 #include "Debug/Assert.h"
 #include "Debug/Output.h"
+#include "Debug/Panic.h"
 #include "Lib/String.h"
 #include "Sync/SpinLock.h"
 
@@ -31,7 +33,7 @@ struct BlockHeader {
 };
 static_assert(sizeof(BlockHeader) == 16, "BlockHeader must keep payloads 16 byte aligned");
 
-alignas(16) static uint8_t s_Region[HEAP_SIZE];
+static uint8_t* s_Region = nullptr;
 static BlockHeader* s_FreeLists[ORDER_COUNT];
 static SpinLock s_Lock;
 static size_t s_UsedBytes = 0;
@@ -86,6 +88,12 @@ void Initialize() {
     if (s_Initialized) {
         return;
     }
+
+    s_Region = reinterpret_cast<uint8_t*>(Frame::Allocate(HEAP_SIZE / Frame::SIZE));
+    if (s_Region == nullptr) {
+        PANIC("Not enough physical memory for the kernel heap");
+    }
+
     for (size_t i = 0; i < ORDER_COUNT; i++) {
         s_FreeLists[i] = nullptr;
     }

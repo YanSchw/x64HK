@@ -50,15 +50,16 @@ qemu-headless: all
 	$(VERBOSE) $(QEMU) $(QEMU_BOOT) -display none -serial stdio -smp $(QEMU_CPUS) \
 		$(QEMU_ACCEL) $(QEMU_FLAGS) $(QEMU_EXTRA)
 
-TEST_CORES   ?= 1 4
+TEST_CONFIGS ?= 1:128 4:512 4:8192
 TEST_TIMEOUT ?= 180
 
 test:
 	$(VERBOSE) $(MAKE) BUILD_DIR="$(BUILD_ROOT)/Test" CXXFLAGS_OPT="-O1" TEST=1 run-tests
 
 run-tests: all
-	$(VERBOSE) for cores in $(TEST_CORES); do \
-		./Tools/RunTests.sh "$(QEMU)" "$(KERNEL32)" "$$cores" "$(TEST_TIMEOUT)" || exit 1; \
+	$(VERBOSE) for config in $(TEST_CONFIGS); do \
+		./Tools/RunTests.sh "$(QEMU)" "$(KERNEL32)" "$${config%%:*}" "$${config##*:}" \
+			"$(TEST_TIMEOUT)" || exit 1; \
 	done
 
 gdb: all
@@ -84,6 +85,6 @@ help::
 	@printf '  %-14s %s\n' "*-serial"    "Route the serial console to stdout (e.g. qemu-serial)"
 	@printf '  %-14s %s\n' "*-gdb"       "Start halted and wait for GDB (e.g. qemu-gdb)"
 	@printf '  %-14s %s\n' "connect-gdb" "Attach GDB to a waiting QEMU"
-	@printf '  %-14s %s\n' "test"        "Run the boot time test suites on $(TEST_CORES) cores"
+	@printf '  %-14s %s\n' "test"        "Run the boot time test suites ($(TEST_CONFIGS))"
 
 .PHONY: qemu qemu-headless gdb connect-gdb test run-tests

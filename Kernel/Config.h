@@ -23,6 +23,10 @@ constexpr unsigned SCHEDULER_TICK_MS = 10;
 /// Size of the kernel heap, as a power of two.
 constexpr size_t HEAP_LOG2 = 24;
 
+/// Boot/LongMode.asm identity maps this much with 2 MiB pages. Physical memory
+/// above it cannot be reached until the kernel builds page tables of its own.
+constexpr uint64_t IDENTITY_MAPPED_LIMIT = 4 * GIB;
+
 /// Where the real mode AP trampoline is relocated to. Must be below 1 MiB and
 /// 4 KiB aligned, because a Startup-IPI only carries a page number.
 constexpr uintptr_t AP_TRAMPOLINE_ADDRESS = 0x40000;

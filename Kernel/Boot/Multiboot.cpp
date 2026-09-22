@@ -1,5 +1,7 @@
 #include "Boot/Multiboot.h"
 #include "Debug/Output.h"
+#include "Lib/Math.h"
+#include "Lib/String.h"
 
 // Written by Boot/Entry.asm from eax/ebx before anything else runs.
 extern "C" {
@@ -253,6 +255,41 @@ const char* GetBootLoaderName() {
 
 uintptr_t GetAcpiRsdp() {
     return s_AcpiRsdp;
+}
+
+static bool Describe(uint64_t InStart, uint64_t InLength, MemoryRegion& OutRegion) {
+    const bool present = InStart != 0 && InLength != 0;
+    OutRegion = {present ? InStart : 0, present ? InLength : 0, MemoryType::RESERVED};
+    return true;
+}
+
+bool GetInfoRegion(unsigned InIndex, MemoryRegion& OutRegion) {
+    if (s_Standard == Standard::NONE || MultibootInfo == 0) {
+        return false;
+    }
+
+    if (s_Standard == Standard::V2) {
+        if (InIndex > 0) {
+            return false;
+        }
+        return Describe(MultibootInfo, reinterpret_cast<const V2::InfoHeader*>(MultibootInfo)->TotalSize,
+                        OutRegion);
+    }
+
+    const auto* info = reinterpret_cast<const V1::Info*>(uintptr_t{MultibootInfo});
+    switch (InIndex) {
+        case 0:
+            return Describe(MultibootInfo, sizeof(V1::Info), OutRegion);
+        case 1:
+            return Describe(info->MemoryMapAddress, info->MemoryMapLength, OutRegion);
+        case 2:
+            return Describe(info->ModuleAddress, info->ModuleCount * sizeof(V1::ModuleEntry), OutRegion);
+        case 3:
+            return Describe(info->CommandLine, s_CommandLine != nullptr ? strlen(s_CommandLine) + 1 : 0,
+                            OutRegion);
+        default:
+            return false;
+    }
 }
 
 unsigned GetMemoryRegionCount() {

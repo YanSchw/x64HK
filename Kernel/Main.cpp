@@ -16,6 +16,7 @@
 #include "Device/SerialStream.h"
 #include "Device/TextStream.h"
 #include "Interrupt/Guard.h"
+#include "Memory/Frame.h"
 #include "Memory/Heap.h"
 #ifdef TEST
 #include "Test/Test.h"
@@ -49,10 +50,12 @@ static void RegisterDebugStreams() {
 
 extern "C" int Main() {
     RegisterDebugStreams();
+    Frame::Initialize();
     Heap::Initialize();
 
     DBG << "x64HK on " << Dec << Cpu::Count() << " cores" << EndLine;
     Multiboot::Dump();
+    Frame::Dump();
 
     IoApic::Initialize();
     Ps2Controller::Initialize();

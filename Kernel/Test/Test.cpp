@@ -16,6 +16,7 @@ unsigned s_Suites = 0;
 class RunnerThread : public Thread {
 public:
     void Action() override {
+        Test::RunFrameStressSuite();
         Test::RunSemaphoreSuite();
         Test::RunGuardSuite();
         Test::Finish();
@@ -48,6 +49,8 @@ void Test::Check(bool InPassed, const char* InExpression, const char* InFile, un
 void Test::RunUnitSuites() {
     Out() << EndLine << "x64HK tests" << EndLine << Flush;
 
+    RunFrameSuite();
+    RunFrameDrainSuite();
     RunHeapSuite();
     RunRingBufferSuite();
     RunKeyDecoderSuite();
@@ -64,9 +67,8 @@ void Test::Finish() {
     Out() << EndLine << (passed ? "PASS" : "FAIL") << ": " << Dec << s_Checks << " checks in " << s_Suites
           << " suites, " << s_Failures << " failed" << EndLine << Flush;
 
+    // QEMU takes a moment to act on this, so anything printed after it would be
+    // cut off mid word. The verdict above is the whole report.
     Debug::RequestExit(passed ? Debug::ExitCode::SUCCESS : Debug::ExitCode::FAILURE);
-
-    // Only reached when the device is absent, e.g. booted on real hardware.
-    Out() << "isa-debug-exit not present, halting" << EndLine << Flush;
     Cpu::Die();
 }
