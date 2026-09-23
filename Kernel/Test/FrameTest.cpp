@@ -2,8 +2,9 @@
 #include "Boot/Multiboot.h"
 #include "Config.h"
 #include "Memory/Frame.h"
+#include "Memory/Paging.h"
 
-extern "C" uint8_t ___KERNEL_START___;
+extern "C" uint8_t ___BOOT_START___;
 extern "C" uint8_t ___KERNEL_END___;
 
 namespace {
@@ -22,8 +23,8 @@ bool IsInAvailableRegion(uintptr_t InAddress) {
 }
 
 bool OverlapsKernel(uintptr_t InAddress) {
-    const uintptr_t start = reinterpret_cast<uintptr_t>(&___KERNEL_START___);
-    const uintptr_t end = reinterpret_cast<uintptr_t>(&___KERNEL_END___);
+    const uintptr_t start = reinterpret_cast<uintptr_t>(&___BOOT_START___);
+    const uintptr_t end = reinterpret_cast<uintptr_t>(&___KERNEL_END___) - Config::KERNEL_VMA;
     return InAddress < end && InAddress + Frame::SIZE > start;
 }
 
@@ -32,12 +33,17 @@ bool IsUsable(uintptr_t InAddress) {
            IsInAvailableRegion(InAddress);
 }
 
+/// Frames come back as physical addresses; only the direct map can reach them.
+volatile uint64_t* Contents(uintptr_t InFrame) {
+    return reinterpret_cast<volatile uint64_t*>(Paging::ToVirtual(InFrame));
+}
+
 void Stamp(uintptr_t InFrame, uint64_t InValue) {
-    *reinterpret_cast<volatile uint64_t*>(InFrame) = InValue;
+    *Contents(InFrame) = InValue;
 }
 
 uint64_t Read(uintptr_t InFrame) {
-    return *reinterpret_cast<volatile uint64_t*>(InFrame);
+    return *Contents(InFrame);
 }
 
 }  // namespace
@@ -51,7 +57,14 @@ void Test::RunFrameSuite() {
     TEST_CHECK(total > 0);
     TEST_CHECK(free > 0);
     TEST_CHECK_EQ(Frame::GetUsedFrames(), total - free);
-    TEST_CHECK(total * Frame::SIZE <= Config::IDENTITY_MAPPED_LIMIT);
+
+    // Everything the loader called available is managed, give or take the
+    // partial frames at each region's edges.
+    const uint64_t available = Multiboot::GetAvailableMemory();
+    const uint64_t managed = uint64_t{total} * Frame::SIZE;
+    const uint64_t slack = uint64_t{Multiboot::GetMemoryRegionCount()} * 2 * Frame::SIZE;
+    TEST_CHECK(managed <= available);
+    TEST_CHECK(available - managed <= slack);
 
     // The heap took its region during boot, so something must be in use.
     TEST_CHECK(Frame::GetUsedFrames() > 0);

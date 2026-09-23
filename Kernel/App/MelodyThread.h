@@ -7,6 +7,7 @@
 class MelodyThread : public Thread {
 public:
     void Action() override;
+    const char* Name() const override { return "melody"; }
 
 private:
     struct Note {

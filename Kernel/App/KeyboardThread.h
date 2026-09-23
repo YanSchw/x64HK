@@ -7,6 +7,7 @@
 class KeyboardThread : public Thread {
 public:
     void Action() override;
+    const char* Name() const override { return "keyboard"; }
 
 private:
     unsigned m_Column = 0;

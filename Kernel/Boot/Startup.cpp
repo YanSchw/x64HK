@@ -3,6 +3,7 @@
 #include "Arch/Acpi.h"
 #include "Arch/Apic.h"
 #include "Arch/Cpu.h"
+#include "Arch/Gdt.h"
 #include "Arch/Idt.h"
 #include "Arch/Pic.h"
 #include "Compiler/Libc.h"
@@ -14,6 +15,8 @@
 static bool s_IsBootstrapProcessor = true;
 
 extern "C" [[noreturn]] void KernelInit() {
+    Gdt::Load();
+
     if (s_IsBootstrapProcessor) {
         s_IsBootstrapProcessor = false;
 

@@ -27,6 +27,9 @@ make qemu
 | `make usb USB_DEVICE=…` | Write the ISO to a USB device |
 | `make gdb` / `make connect-gdb` | Debug |
 | `make test` | Run the boot time test suites in QEMU on 1 and 4 cores |
+| `make test-iso` | Run them again over the GRUB handover |
+| `make test-overflow` | Check that a stack overflow is caught |
+| `make test-wprotect` | Check that `.text` really is read only |
 | `make clean` | Remove `Build/` |
 | `make help` | The full list |
 
@@ -117,7 +120,7 @@ Kernel/
   Thread/        Thread, Dispatcher, Scheduler, IdleThread
   Sync/          SpinLock, TicketLock, Semaphore, Bellringer
   Device/        PS/2 keyboard and key decoding, text and serial streams
-  Memory/        physical frame allocator, buddy heap
+  Memory/        physical frame allocator, page tables, buddy heap
   Lib/           Queue, RingBuffer, PerCore, OutputStream, string functions
   Debug/         assertions, panic, per-core debug output
   Compiler/      global constructors, operator new/delete
@@ -149,7 +152,9 @@ come back as a non-zero exit status.
 | `SCHEDULER_TICK_MS` | 10 | LAPIC timer period |
 | `THREAD_STACK_SIZE` | 16 KiB | interrupt frames land here too |
 | `HEAP_LOG2` | 24 | 16 MiB heap, taken from the frame allocator |
-| `IDENTITY_MAPPED_LIMIT` | 4 GiB | what the boot page tables reach, and so the frame allocator too |
+| `IDENTITY_MAPPED_LIMIT` | 4 GiB | what the boot page tables reach, before the kernel builds its own |
+| `KERNEL_VMA` | `0xFFFFFFFF80000000` | where the kernel is linked |
+| `DIRECT_MAP_BASE` | `0xFFFF800000000000` | where all of RAM is mapped |
 | `AP_TRAMPOLINE_ADDRESS` | `0x40000` | must be page aligned, below 1 MiB |
 
 ## Conventions
@@ -171,9 +176,9 @@ Four spaces for indentation, `Tools/Untabify.sh --check` fails if a tab creeps b
 
 ## Not there yet
 
-- No UEFI, no higher-half mapping, no virtual memory past the boot identity map
-- Physical memory above 4 GiB is reported but not used: the boot page tables
-  only identity map that far, so the frame allocator stops there
+- No UEFI
+- Page tables are 4 KiB throughout. No large pages, which costs about 0.2% of
+  RAM in tables
 - No user mode — everything runs in ring 0 and the GDT has no ring 3 segments
 - No FPU or SSE, so context switches never have to save vector state
 - One I/O APIC and flat logical APIC addressing, which caps `MAX_CORES` at 8

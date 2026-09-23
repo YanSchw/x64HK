@@ -37,6 +37,7 @@ public:
     void Resume(bool InRequeue = true);
 
     Thread* Active() { return m_Dispatcher.Active(); }
+    const Thread* Active() const { return m_Dispatcher.Active(); }
 
     bool IsActive(const Thread* InThread, unsigned InCoreId) {
         return m_Dispatcher.IsActive(InThread, InCoreId);

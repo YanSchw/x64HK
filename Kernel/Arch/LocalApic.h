@@ -13,6 +13,9 @@ void Initialize(uint8_t InLogicalId);
 /// interrupt forever. Never call it for the spurious vector.
 void EndOfInterrupt();
 
+/// Where this core's registers are mapped, as reported by the MADT.
+uintptr_t GetBaseAddress();
+
 uint8_t GetId();
 uint8_t GetLogicalId();
 uint8_t GetVersion();

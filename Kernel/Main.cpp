@@ -18,6 +18,7 @@
 #include "Interrupt/Guard.h"
 #include "Memory/Frame.h"
 #include "Memory/Heap.h"
+#include "Memory/Paging.h"
 #ifdef TEST
 #include "Test/Test.h"
 #endif
@@ -51,11 +52,13 @@ static void RegisterDebugStreams() {
 extern "C" int Main() {
     RegisterDebugStreams();
     Frame::Initialize();
+    Paging::Initialize();
     Heap::Initialize();
 
     DBG << "x64HK on " << Dec << Cpu::Count() << " cores" << EndLine;
     Multiboot::Dump();
     Frame::Dump();
+    Paging::Dump();
 
     IoApic::Initialize();
     Ps2Controller::Initialize();

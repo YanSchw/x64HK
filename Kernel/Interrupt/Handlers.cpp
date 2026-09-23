@@ -7,6 +7,7 @@
 #include "Arch/Idt.h"
 #include "Arch/LocalApic.h"
 #include "Device/Ps2Controller.h"
+#include "Memory/KernelStack.h"
 #include "Debug/Output.h"
 #include "Debug/Panic.h"
 
@@ -73,8 +74,21 @@ static void PrintContext(const InterruptContext* InContext) {
 
 [[gnu::interrupt]] static void HandlePageFault(InterruptContext* InContext, uint64_t InError) {
     // CR2 holds the address that could not be translated.
-    DBG << "Page fault at " << reinterpret_cast<void*>(Cpu::CR2::Read()) << ' '
-        << PageFaultError(InError) << EndLine;
+    const uintptr_t address = Cpu::CR2::Read();
+
+    if (KernelStack::IsGuardPage(address)) {
+        // The stack is a mapping of its own now, so the thread object behind it
+        // is still intact and safe to ask.
+        const Thread* thread = Guard::UnsafeVault().Scheduler.Active();
+
+        DBG << "Kernel stack overflow in '" << (thread != nullptr ? thread->Name() : "?") << "' at "
+            << reinterpret_cast<void*>(address) << " on core " << Dec << Cpu::GetId() << EndLine;
+        PrintContext(InContext);
+        PANIC("Kernel stack overflow");
+    }
+
+    DBG << "Page fault at " << reinterpret_cast<void*>(address) << ' ' << PageFaultError(InError)
+        << EndLine;
     PrintContext(InContext);
     PANIC("Page fault");
 }
@@ -165,7 +179,8 @@ void InstallHandlers() {
              Idt::InterruptDescriptor::ReturningWithError(HandleStackSegmentFault));
     Idt::Set(Vector::GENERAL_PROTECTION_FAULT,
              Idt::InterruptDescriptor::ReturningWithError(HandleGeneralProtectionFault));
-    Idt::Set(Vector::PAGE_FAULT, Idt::InterruptDescriptor::ReturningWithError(HandlePageFault));
+    Idt::Set(Vector::PAGE_FAULT,
+             Idt::InterruptDescriptor::ReturningWithError(HandlePageFault, Gdt::IST_FAULT_STACK));
 
     // The three faults that cannot trust the interrupted stack get their own via
     // the Interrupt Stack Table.

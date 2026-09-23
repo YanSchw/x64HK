@@ -39,7 +39,7 @@ ApTrampolineGdt:
 ApTrampolineGdtPointer:
     dw 0, 0, 0, 0, 0
 
-[SECTION .text]
+[SECTION .boot]
 [BITS 32]
 
 [EXTERN SegmentInit]  ; Boot/Entry.asm

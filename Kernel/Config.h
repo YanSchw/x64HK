@@ -17,11 +17,23 @@ constexpr size_t IST_STACK_SIZE = 8 * KIB;
 /// Per-thread stack. Interrupt frames and epilogues run on it too.
 constexpr size_t THREAD_STACK_SIZE = 16 * KIB;
 
+/// Where those stacks are mapped, each one behind an unmapped guard page.
+constexpr uintptr_t KERNEL_STACK_BASE = 0xFFFF'C000'0000'0000;
+
 /// Period of the LAPIC timer that drives preemption and the Bellringer.
 constexpr unsigned SCHEDULER_TICK_MS = 10;
 
 /// Size of the kernel heap, as a power of two.
 constexpr size_t HEAP_LOG2 = 24;
+
+/// Where the kernel is linked. Boot/Sections.ld and the physical aliases it
+/// exports have to agree with this.
+constexpr uintptr_t KERNEL_VMA = 0xFFFF'FFFF'8000'0000;
+
+/// Where all of physical memory is mapped, so the kernel can reach a frame
+/// without a mapping of its own. Boot/LongMode.asm already puts the boot map
+/// here, which is why nothing has to be rebased once Paging takes over.
+constexpr uintptr_t DIRECT_MAP_BASE = 0xFFFF'8000'0000'0000;
 
 /// Boot/LongMode.asm identity maps this much with 2 MiB pages. Physical memory
 /// above it cannot be reached until the kernel builds page tables of its own.
@@ -36,8 +48,5 @@ constexpr unsigned EPILOGUE_QUEUE_SIZE = 64;
 
 /// Decoded keystrokes buffered for the keyboard consumer.
 constexpr unsigned KEY_BUFFER_SIZE = 32;
-
-/// Written to the low end of every thread stack to detect overflow.
-constexpr uint64_t STACK_CANARY = 0x7841'3634'484B'2121ULL;
 
 }  // namespace Config

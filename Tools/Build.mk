@@ -33,7 +33,7 @@ endif
 CXXFLAGS_BASE  := -std=c++23 -m64 -I. -I$(SRC_DIR) -ffreestanding -nostdinc -nostdlib -nodefaultlibs \
                   -nostartfiles -fno-pic -no-pie -fno-rtti -fno-exceptions \
                   -fno-stack-protector -fno-use-cxa-atexit -fno-threadsafe-statics -fno-strict-aliasing \
-                  -mno-red-zone -mno-mmx -mno-sse -mgeneral-regs-only -mcx16 \
+                  -mno-red-zone -mno-mmx -mno-sse -mgeneral-regs-only -mcx16 -mcmodel=kernel \
                   -g -gdwarf-4 -MMD -MP
 CXXFLAGS_WARN  := -Wall -Wextra -Werror -Wno-unused-parameter -Wno-unused-variable \
                   -Wno-non-virtual-dtor

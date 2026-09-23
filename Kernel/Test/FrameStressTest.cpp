@@ -1,6 +1,7 @@
 #include "Test/Test.h"
 #include "Interrupt/Guard.h"
 #include "Memory/Frame.h"
+#include "Memory/Paging.h"
 #include "Sync/Semaphore.h"
 #include "Thread/Thread.h"
 
@@ -41,14 +42,16 @@ private:
                 s_Exhausted[m_Index]++;
                 continue;
             }
-            *reinterpret_cast<volatile uint64_t*>(frames[slot]) = Token(m_Index, InRound, slot);
+            *reinterpret_cast<volatile uint64_t*>(Paging::ToVirtual(frames[slot])) =
+                Token(m_Index, InRound, slot);
         }
 
         for (size_t slot = 0; slot < FRAMES_PER_ROUND; slot++) {
             if (frames[slot] == 0) {
                 continue;
             }
-            if (*reinterpret_cast<volatile uint64_t*>(frames[slot]) != Token(m_Index, InRound, slot)) {
+            if (*reinterpret_cast<volatile uint64_t*>(Paging::ToVirtual(frames[slot])) !=
+                Token(m_Index, InRound, slot)) {
                 s_Aliased[m_Index]++;
             }
             Frame::Free(frames[slot]);
@@ -64,6 +67,11 @@ StressThread s_Workers[WORKER_COUNT] = {StressThread(0), StressThread(1), Stress
 
 void Test::RunFrameStressSuite() {
     Begin("Frame stress");
+
+    // Readying a thread maps it a stack, so the baseline has to come after.
+    for (StressThread& worker : s_Workers) {
+        worker.Prepare();
+    }
 
     const size_t free = Frame::GetFreeFrames();
 

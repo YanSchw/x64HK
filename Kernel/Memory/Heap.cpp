@@ -1,6 +1,7 @@
 #include "Memory/Heap.h"
 #include "Config.h"
 #include "Memory/Frame.h"
+#include "Memory/Paging.h"
 #include "Arch/CpuInterrupt.h"
 #include "Debug/Assert.h"
 #include "Debug/Output.h"
@@ -89,7 +90,8 @@ void Initialize() {
         return;
     }
 
-    s_Region = reinterpret_cast<uint8_t*>(Frame::Allocate(HEAP_SIZE / Frame::SIZE));
+    const uintptr_t frames = Frame::Allocate(HEAP_SIZE / Frame::SIZE);
+    s_Region = frames != 0 ? reinterpret_cast<uint8_t*>(Paging::ToVirtual(frames)) : nullptr;
     if (s_Region == nullptr) {
         PANIC("Not enough physical memory for the kernel heap");
     }

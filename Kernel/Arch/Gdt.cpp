@@ -5,14 +5,6 @@
 
 namespace Gdt {
 
-// 32-bit table used between the boot loader handover and the switch to long
-// mode. Flat 0..4 GiB, because the boot code addresses physical memory directly.
-alignas(16) constinit static SegmentDescriptor s_ProtectedMode[] = {
-    SegmentDescriptor::Null(),
-    SegmentDescriptor::Segment(0, UINT32_MAX, true, 0, Size::BIT32),
-    SegmentDescriptor::Segment(0, UINT32_MAX, false, 0, Size::BIT32),
-};
-
 // Long mode table. Slots 3 and up hold one 16-byte TSS descriptor per core, so
 // the array is declared as plain 8-byte entries and written through below.
 alignas(16) constinit static SegmentDescriptor s_LongMode[3 + 2 * Config::MAX_CORES] = {
@@ -21,9 +13,14 @@ alignas(16) constinit static SegmentDescriptor s_LongMode[3 + 2 * Config::MAX_CO
     SegmentDescriptor::Segment64(false, 0),
 };
 
-// Referenced by Boot/Entry.asm and Boot/LongMode.asm.
-extern "C" constexpr Pointer GdtProtectedModePointer(s_ProtectedMode);
 extern "C" constexpr Pointer GdtLongModePointer(s_LongMode);
+
+// Boot/Entry.asm runs on a table of its own, which has no room for the task
+// state segments. Its two long mode selectors match Selector, so swapping
+// tables needs no segment register reload.
+void Load() {
+    asm volatile("lgdt %0" : : "m"(GdtLongModePointer) : "memory");
+}
 
 static TaskStateSegment s_TaskState[Config::MAX_CORES];
 alignas(16) static uint8_t s_FaultStack[Config::MAX_CORES][Config::IST_STACK_SIZE];

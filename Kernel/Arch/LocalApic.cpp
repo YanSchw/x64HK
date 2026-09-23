@@ -10,6 +10,10 @@ volatile uintptr_t s_BaseAddress = 0xfee0'0000;
 // The register unions below read on construction and write back on destruction,
 // so a scoped block reads as a read-modify-write of one hardware register.
 
+uintptr_t GetBaseAddress() {
+    return s_BaseAddress;
+}
+
 union IdentificationRegister {
     struct {
         uint32_t : 24, ApicId : 8;

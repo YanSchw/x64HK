@@ -13,7 +13,10 @@ set -u
 
 usage() {
     cat <<USAGE
-Usage: Tools/RunTests.sh QEMU KERNEL [CORES] [MEMORY_MIB] [TIMEOUT_SECONDS]
+Usage: Tools/RunTests.sh QEMU IMAGE [CORES] [MEMORY_MIB] [TIMEOUT_SECONDS]
+
+IMAGE is either a kernel ELF (loaded by QEMU itself) or a .iso (booted
+through GRUB, which is the handover real hardware uses).
 USAGE
     exit 2
 }
@@ -21,10 +24,13 @@ USAGE
 [ $# -ge 2 ] || usage
 
 QEMU=$1
-KERNEL=$2
+IMAGE=$2
 CORES=${3:-4}
 MEMORY=${4:-512}
 TIMEOUT=${5:-120}
+
+# When set, the guest is expected to die, and its serial log to contain this.
+EXPECT=${6:-}
 
 EXIT_PASS=33
 EXIT_FAIL=35
@@ -33,10 +39,15 @@ EXIT_FAIL=35
     printf 'RunTests: %s not found\n' "$QEMU" >&2
     exit 2
 }
-[ -f "$KERNEL" ] || {
-    printf 'RunTests: %s not found\n' "$KERNEL" >&2
+[ -f "$IMAGE" ] || {
+    printf 'RunTests: %s not found\n' "$IMAGE" >&2
     exit 2
 }
+
+case $IMAGE in
+    *.iso) BOOT="-cdrom $IMAGE"; LABEL="iso" ;;
+    *)     BOOT="-kernel $IMAGE"; LABEL="elf" ;;
+esac
 
 # Serial goes to a file rather than stdout: QEMU's stdio chardev wants a
 # terminal it can put into raw mode, which is exactly what a CI runner has not
@@ -55,13 +66,13 @@ else
     printf 'RunTests: no timeout command, a hung kernel will hang this run\n' >&2
 fi
 
-printf 'TEST  %s cores, %s MiB\n' "$CORES" "$MEMORY"
+printf 'TEST  %s, %s cores, %s MiB\n' "$LABEL" "$CORES" "$MEMORY"
 
 # Deliberately not the QEMU_FLAGS from Tools/Qemu.mk: those pull in an audio
 # backend for the PC speaker, and there is no sound daemon on a build runner.
 # shellcheck disable=SC2086
 $TIMEOUT_CMD "$QEMU" \
-    -kernel "$KERNEL" \
+    $BOOT \
     -display none \
     -serial "file:$LOG" \
     -m "$MEMORY" \
@@ -75,23 +86,33 @@ status=$?
 
 [ -s "$LOG" ] && cat "$LOG"
 
+if [ -n "$EXPECT" ]; then
+    if [ "$status" -eq "$EXIT_FAIL" ] && grep -q "$EXPECT" "$LOG"; then
+        printf 'PASS  %s, %s cores, %s MiB: died as expected\n\n' "$LABEL" "$CORES" "$MEMORY"
+        exit 0
+    fi
+    printf 'FAIL  %s, %s cores, %s MiB: expected a panic matching "%s", got status %s\n\n' \
+        "$LABEL" "$CORES" "$MEMORY" "$EXPECT" "$status" >&2
+    exit 1
+fi
+
 case $status in
     "$EXIT_PASS")
-        printf 'PASS  %s cores, %s MiB\n\n' "$CORES" "$MEMORY"
+        printf 'PASS  %s, %s cores, %s MiB\n\n' "$LABEL" "$CORES" "$MEMORY"
         exit 0
         ;;
     "$EXIT_FAIL")
-        printf 'FAIL  %s cores, %s MiB: failed checks\n\n' "$CORES" "$MEMORY" >&2
+        printf 'FAIL  %s, %s cores, %s MiB: failed checks\n\n' "$LABEL" "$CORES" "$MEMORY" >&2
         ;;
     124 | 137)
-        printf 'FAIL  %s cores, %s MiB: no verdict within %ss, killed\n\n' "$CORES" "$MEMORY" "$TIMEOUT" >&2
+        printf 'FAIL  %s, %s cores, %s MiB: no verdict within %ss, killed\n\n' "$LABEL" "$CORES" "$MEMORY" "$TIMEOUT" >&2
         ;;
     0)
         # QEMU exited on its own, so the kernel never reached the exit device.
-        printf 'FAIL  %s cores, %s MiB: QEMU exited without a verdict\n\n' "$CORES" "$MEMORY" >&2
+        printf 'FAIL  %s, %s cores, %s MiB: QEMU exited without a verdict\n\n' "$LABEL" "$CORES" "$MEMORY" >&2
         ;;
     *)
-        printf 'FAIL  %s cores, %s MiB: QEMU exit status %s\n\n' "$CORES" "$MEMORY" "$status" >&2
+        printf 'FAIL  %s, %s cores, %s MiB: QEMU exit status %s\n\n' "$LABEL" "$CORES" "$MEMORY" "$status" >&2
         ;;
 esac
 

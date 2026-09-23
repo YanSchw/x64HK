@@ -3,7 +3,7 @@
 
 namespace Cpu {
 
-enum class CR0 : uint64_t {
+enum class CR0Flags : uint64_t {
     PE = 1ULL << 0,   ///< Protected mode enabled
     MP = 1ULL << 1,   ///< Monitor co-processor
     EM = 1ULL << 2,   ///< Emulation, i.e. no x87 FPU present
@@ -17,7 +17,7 @@ enum class CR0 : uint64_t {
     PG = 1ULL << 31,  ///< Paging
 };
 
-enum class CR4 : uint64_t {
+enum class CR4Flags : uint64_t {
     VME = 1ULL << 0,
     PVI = 1ULL << 1,
     TSD = 1ULL << 2,
@@ -37,7 +37,7 @@ enum class CR4 : uint64_t {
     SMAP = 1ULL << 21,
 };
 
-/// Typed access to CR0/CR2/CR3/CR4. The register index has to be an immediate,
+/// Typed access to the control registers. The register index has to be an immediate,
 /// hence the template parameter and the %c modifier.
 template <uint8_t INDEX>
 class ControlRegister {
@@ -51,7 +51,9 @@ public:
     static void Write(uintptr_t InValue) { asm volatile("mov %0, %%cr%c1" : : "r"(InValue), "n"(INDEX)); }
 };
 
+using CR0 = ControlRegister<0>;
 using CR2 = ControlRegister<2>;
 using CR3 = ControlRegister<3>;
+using CR4 = ControlRegister<4>;
 
 }  // namespace Cpu

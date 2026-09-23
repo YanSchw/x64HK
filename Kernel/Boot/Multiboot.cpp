@@ -1,5 +1,6 @@
 #include "Boot/Multiboot.h"
 #include "Debug/Output.h"
+#include "Config.h"
 #include "Lib/Math.h"
 #include "Lib/String.h"
 
@@ -130,6 +131,18 @@ struct ModuleEntry {
 
 // --- Cached view ------------------------------------------------------------
 
+/// The loader hands over physical addresses. Everything below reads them
+/// through the direct map, so the pointers stay valid once the kernel drops the
+/// boot loader's one to one mapping.
+static uintptr_t Reachable(uint64_t InPhysical) {
+    return InPhysical != 0 ? static_cast<uintptr_t>(InPhysical) + Config::DIRECT_MAP_BASE : 0;
+}
+
+template <typename T>
+static const T* PointerTo(uint64_t InPhysical) {
+    return reinterpret_cast<const T*>(Reachable(InPhysical));
+}
+
 static Standard s_Standard = Standard::NONE;
 static const char* s_CommandLine = nullptr;
 static const char* s_BootLoaderName = nullptr;
@@ -202,23 +215,22 @@ static void ParseV1(uintptr_t InInfo) {
     const auto* info = reinterpret_cast<const V1::Info*>(InInfo);
 
     if ((info->Flags & V1::CMDLINE) != 0) {
-        s_CommandLine = reinterpret_cast<const char*>(static_cast<uintptr_t>(info->CommandLine));
+        s_CommandLine = PointerTo<char>(info->CommandLine);
     }
     if ((info->Flags & V1::BOOT_LOADER_NAME) != 0) {
-        s_BootLoaderName = reinterpret_cast<const char*>(static_cast<uintptr_t>(info->Syms[3]));
+        s_BootLoaderName = PointerTo<char>(info->Syms[3]);
     }
     if ((info->Flags & V1::MEMORY_MAP) != 0 && info->MemoryMapLength >= sizeof(V1::MemoryMapEntry)) {
         // Multiboot1 entries are self-describing; assume they are uniform, which
         // every loader in practice makes them.
-        const auto* first = reinterpret_cast<const V1::MemoryMapEntry*>(
-            static_cast<uintptr_t>(info->MemoryMapAddress));
+        const auto* first = PointerTo<V1::MemoryMapEntry>(info->MemoryMapAddress);
         s_MemoryMapEntrySize = first->Size + sizeof(uint32_t);
         s_MemoryMapEntries = reinterpret_cast<const uint8_t*>(first);
         s_MemoryRegionCount = info->MemoryMapLength / s_MemoryMapEntrySize;
     }
     if ((info->Flags & V1::MODULES) != 0) {
         const auto* modules =
-            reinterpret_cast<const V1::ModuleEntry*>(static_cast<uintptr_t>(info->ModuleAddress));
+            PointerTo<V1::ModuleEntry>(info->ModuleAddress);
         for (uint32_t i = 0; i < info->ModuleCount && s_ModuleCount < ArraySize(s_Modules); i++) {
             s_Modules[s_ModuleCount++] = &modules[i];
         }
@@ -230,10 +242,10 @@ bool Initialize() {
 
     if (MultibootMagic == LOADER_MAGIC_V2) {
         s_Standard = Standard::V2;
-        ParseV2(info);
+        ParseV2(Reachable(info));
     } else if (MultibootMagic == LOADER_MAGIC_V1) {
         s_Standard = Standard::V1;
-        ParseV1(info);
+        ParseV1(Reachable(info));
     } else {
         s_Standard = Standard::NONE;
         return false;
@@ -272,11 +284,10 @@ bool GetInfoRegion(unsigned InIndex, MemoryRegion& OutRegion) {
         if (InIndex > 0) {
             return false;
         }
-        return Describe(MultibootInfo, reinterpret_cast<const V2::InfoHeader*>(MultibootInfo)->TotalSize,
-                        OutRegion);
+        return Describe(MultibootInfo, PointerTo<V2::InfoHeader>(MultibootInfo)->TotalSize, OutRegion);
     }
 
-    const auto* info = reinterpret_cast<const V1::Info*>(uintptr_t{MultibootInfo});
+    const auto* info = PointerTo<V1::Info>(MultibootInfo);
     switch (InIndex) {
         case 0:
             return Describe(MultibootInfo, sizeof(V1::Info), OutRegion);
@@ -338,7 +349,7 @@ bool GetModule(unsigned InIndex, Module& OutModule) {
     } else {
         const auto* entry = static_cast<const V1::ModuleEntry*>(s_Modules[InIndex]);
         OutModule = {entry->Start, entry->End,
-                     reinterpret_cast<const char*>(static_cast<uintptr_t>(entry->CommandLine))};
+                     PointerTo<char>(entry->CommandLine)};
     }
     return true;
 }

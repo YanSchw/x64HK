@@ -8,4 +8,5 @@
 class IdleThread : public Thread {
 public:
     void Action() override;
+    const char* Name() const override { return "idle"; }
 };

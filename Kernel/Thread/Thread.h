@@ -8,7 +8,7 @@
 // Derive and override Action() to give a thread something to do.
 class Thread {
 public:
-    Thread();
+    Thread() = default;
     virtual ~Thread() = default;
 
     // Copying a thread would duplicate a stack that contains absolute pointers
@@ -18,9 +18,18 @@ public:
     Thread& operator=(const Thread&) = delete;
     Thread& operator=(Thread&&) = delete;
 
+    /// Reported when a fault has to say which thread caused it.
+    virtual const char* Name() const { return "thread"; }
+
     /// The thread body. The default implementation returns immediately, which
     /// is only valid because Kickoff catches that case.
     virtual void Action();
+
+    /// Maps a stack and lays out the first context. Idempotent, and separate
+    /// from the constructor because static threads exist before the allocators
+    /// they need.
+    void Prepare();
+    bool IsPrepared() const { return m_StackTop != 0; }
 
     /// Activates this thread on the calling core, abandoning the current stack.
     /// Used once per core to leave the boot stack.
@@ -32,9 +41,6 @@ public:
     /// Marked by Scheduler::Kill; checked before the thread is scheduled again.
     bool IsDying() const { return __atomic_load_n(&m_Dying, __ATOMIC_ACQUIRE); }
     void MarkDying() { __atomic_store_n(&m_Dying, true, __ATOMIC_RELEASE); }
-
-    /// False once the stack has grown past its low end and clobbered the canary.
-    bool HasIntactStack() const;
 
     /// Link field for Lib/Queue. Public because a member pointer template
     /// argument has to be accessible at the point of use. A thread is only ever
@@ -49,8 +55,5 @@ private:
 
     Context m_Context;
     bool m_Dying = false;
-
-    /// Interrupt frames and epilogues run on this stack too, not just the
-    /// thread body, so it is considerably larger than the code alone needs.
-    alignas(16) uint8_t m_Stack[Config::THREAD_STACK_SIZE];
+    uintptr_t m_StackTop = 0;
 };

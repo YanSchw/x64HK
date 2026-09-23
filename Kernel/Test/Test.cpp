@@ -15,7 +15,14 @@ unsigned s_Suites = 0;
 /// Runs the suites that need to be on a thread, then reports for everyone.
 class RunnerThread : public Thread {
 public:
+    const char* Name() const override { return "test runner"; }
+
     void Action() override {
+#ifdef TEST_OVERFLOW
+        // The boot stack has no guard page, so this only means anything here.
+        Test::RunStackOverflowSuite();
+#endif
+        Test::RunSmpSuite();
         Test::RunFrameStressSuite();
         Test::RunSemaphoreSuite();
         Test::RunGuardSuite();
@@ -49,12 +56,17 @@ void Test::Check(bool InPassed, const char* InExpression, const char* InFile, un
 void Test::RunUnitSuites() {
     Out() << EndLine << "x64HK tests" << EndLine << Flush;
 
+#ifdef TEST_WPROTECT
+    RunWriteProtectSuite();
+#endif
+    RunPagingSuite();
     RunFrameSuite();
     RunFrameDrainSuite();
     RunHeapSuite();
     RunRingBufferSuite();
     RunKeyDecoderSuite();
     RunPs2ControllerSuite();
+    RunKernelStackSuite();
 }
 
 Thread& Test::Runner() {

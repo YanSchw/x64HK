@@ -12,6 +12,7 @@ public:
         : m_Name(InName), m_Attribute(InAttribute), m_Row(InRow) {}
 
     void Action() override;
+    const char* Name() const override { return m_Name; }
 
 private:
     const char* m_Name;

@@ -12,19 +12,23 @@ static PerCore<IdleThread> s_IdleThread;
 Thread* Scheduler::GetNext() {
     while (Thread* next = m_ReadyQueue.Dequeue()) {
         if (!next->IsDying()) {
-            ASSERT(next->HasIntactStack());
             return next;
         }
     }
+
     return &s_IdleThread.Get();
 }
 
 void Scheduler::Schedule() {
+    // Idle threads never pass through Ready, and this is the one point every
+    // core reaches before it could ever fall back to one.
+    s_IdleThread.Get().Prepare();
     m_Dispatcher.Go(GetNext());
 }
 
 void Scheduler::Ready(Thread* InThread) {
     ASSERT(InThread != nullptr);
+    InThread->Prepare();
     m_ReadyQueue.Append(*InThread);
 
     // Wake one sleeping core so the new work is picked up without waiting for

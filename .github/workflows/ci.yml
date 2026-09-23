@@ -57,7 +57,8 @@ jobs:
       - name: Install toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang lld llvm nasm qemu-system-x86
+          sudo apt-get install -y --no-install-recommends clang lld llvm nasm \
+            qemu-system-x86 grub-pc-bin grub-common xorriso
 
       # No KVM on a hosted runner, so everything runs under TCG. Tools/RunTests.sh
       # asks for it explicitly and never touches an audio backend, which a runner
@@ -66,3 +67,13 @@ jobs:
       # up in this job's log without an artifact.
       - name: Run test suites
         run: make test
+
+      # GRUB puts its own structures somewhere the -kernel path never does.
+      - name: Run test suites over GRUB
+        run: make test-iso
+
+      - name: Check that a stack overflow is caught
+        run: make test-overflow
+
+      - name: Check that .text really is read only
+        run: make test-wprotect

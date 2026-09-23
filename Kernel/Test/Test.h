@@ -33,6 +33,10 @@ Thread& Runner();
 /// Prints the tally and exits the emulator. Never returns.
 [[noreturn]] void Finish();
 
+void RunPagingSuite();
+#ifdef TEST_WPROTECT
+void RunWriteProtectSuite();
+#endif
 void RunFrameSuite();
 void RunFrameDrainSuite();
 void RunFrameStressSuite();
@@ -40,6 +44,11 @@ void RunHeapSuite();
 void RunRingBufferSuite();
 void RunKeyDecoderSuite();
 void RunPs2ControllerSuite();
+void RunKernelStackSuite();
+#ifdef TEST_OVERFLOW
+void RunStackOverflowSuite();
+#endif
+void RunSmpSuite();
 void RunSemaphoreSuite();
 void RunGuardSuite();
 

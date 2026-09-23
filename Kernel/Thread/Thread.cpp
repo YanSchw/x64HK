@@ -1,19 +1,17 @@
 #include "Thread/Thread.h"
 #include "Interrupt/Guard.h"
+#include "Memory/KernelStack.h"
 #include "Debug/Assert.h"
 #include "Debug/Panic.h"
 
-Thread::Thread() {
-    // Canary at the low end of the stack: the scheduler checks it on every
-    // switch, which turns a silent overflow into a clear failure.
-    *reinterpret_cast<uint64_t*>(m_Stack) = Config::STACK_CANARY;
+void Thread::Prepare() {
+    if (m_StackTop != 0) {
+        return;
+    }
 
-    PrepareContext(m_Stack + Config::THREAD_STACK_SIZE, m_Context, Kickoff,
+    m_StackTop = KernelStack::Allocate();
+    PrepareContext(reinterpret_cast<void*>(m_StackTop), m_Context, Kickoff,
                    reinterpret_cast<uintptr_t>(this), 0, 0);
-}
-
-bool Thread::HasIntactStack() const {
-    return *reinterpret_cast<const uint64_t*>(m_Stack) == Config::STACK_CANARY;
 }
 
 void Thread::Kickoff(uintptr_t InThread, uintptr_t InParam2, uintptr_t InParam3) {

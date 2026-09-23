@@ -15,6 +15,7 @@ public:
     Dispatcher& operator=(const Dispatcher&) = delete;
 
     Thread* Active() { return m_ActiveThread.Get(); }
+    const Thread* Active() const { return m_ActiveThread.Get(); }
     Thread* Active(unsigned InCoreId) { return m_ActiveThread[InCoreId]; }
 
     bool IsActive(const Thread* InThread, unsigned InCoreId) { return m_ActiveThread[InCoreId] == InThread; }

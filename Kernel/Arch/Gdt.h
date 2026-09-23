@@ -113,6 +113,9 @@ static_assert(sizeof(TaskStateSegment) == 104, "Gdt::TaskStateSegment has the wr
 /// trust the interrupted stack.
 constexpr uint8_t IST_FAULT_STACK = 1;
 
+/// Replaces the table Boot/Entry.asm set up. Must run before LoadTaskRegister.
+void Load();
+
 /// Fills in this core's TSS descriptor, points IST1 at its emergency stack and
 /// loads the task register.
 void LoadTaskRegister(unsigned InCoreId);

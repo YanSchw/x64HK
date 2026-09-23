@@ -62,6 +62,32 @@ run-tests: all
 			"$(TEST_TIMEOUT)" || exit 1; \
 	done
 
+# The same suites over the GRUB handover. Worth its own run: the loader puts its
+# structures somewhere else entirely, which QEMU's own -kernel path never shows.
+test-iso:
+	$(VERBOSE) $(MAKE) BUILD_DIR="$(BUILD_ROOT)/Test" CXXFLAGS_OPT="-O1" TEST=1 run-iso-tests
+
+# Runs a thread off the end of its stack and insists the kernel notices.
+test-overflow:
+	$(VERBOSE) $(MAKE) BUILD_DIR="$(BUILD_ROOT)/Overflow" CXXFLAGS_OPT="-O1 -DTEST_OVERFLOW" \
+		TEST=1 run-overflow-test
+
+run-overflow-test: all
+	$(VERBOSE) ./Tools/RunTests.sh "$(QEMU)" "$(KERNEL32)" 1 512 "$(TEST_TIMEOUT)" \
+		"Kernel stack overflow"
+
+# Writes into .text and insists the CPU refuses.
+test-wprotect:
+	$(VERBOSE) $(MAKE) BUILD_DIR="$(BUILD_ROOT)/WProtect" CXXFLAGS_OPT="-O1 -DTEST_WPROTECT" \
+		TEST=1 run-wprotect-test
+
+run-wprotect-test: all
+	$(VERBOSE) ./Tools/RunTests.sh "$(QEMU)" "$(KERNEL32)" 1 512 "$(TEST_TIMEOUT)" \
+		"{ present: 1, write: 1, user: 0"
+
+run-iso-tests: $(ISO_FILE)
+	$(VERBOSE) ./Tools/RunTests.sh "$(QEMU)" "$(ISO_FILE)" 4 512 "$(TEST_TIMEOUT)"
+
 gdb: all
 	$(VERBOSE) gdb "$(KERNEL64)" -ex "set arch i386:x86-64" \
 		-ex "target remote | exec $(QEMU) -gdb stdio $(QEMU_BOOT) -display none -S -smp $(QEMU_CPUS) $(QEMU_FLAGS)"
@@ -86,5 +112,9 @@ help::
 	@printf '  %-14s %s\n' "*-gdb"       "Start halted and wait for GDB (e.g. qemu-gdb)"
 	@printf '  %-14s %s\n' "connect-gdb" "Attach GDB to a waiting QEMU"
 	@printf '  %-14s %s\n' "test"        "Run the boot time test suites ($(TEST_CONFIGS))"
+	@printf '  %-14s %s\n' "test-iso"    "Run them again over the GRUB handover"
+	@printf '  %-14s %s\n' "test-overflow" "Check that a stack overflow is caught"
+	@printf '  %-14s %s\n' "test-wprotect" "Check that .text really is read only"
 
-.PHONY: qemu qemu-headless gdb connect-gdb test run-tests
+.PHONY: qemu qemu-headless gdb connect-gdb test run-tests test-iso run-iso-tests \
+	test-overflow run-overflow-test test-wprotect run-wprotect-test
