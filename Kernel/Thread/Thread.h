@@ -3,13 +3,21 @@
 #include "Config.h"
 #include "Arch/Context.h"
 
-// A thread: a stack, a saved register context and the code to run on it.
+// A thread: a name, a stack, a saved register context and the address it starts
+// running at.
 //
-// Derive and override Action() to give a thread something to do.
+// The entry is a plain function pointer plus an argument, so a thread body is an
+// ordinary function and a thread carries no vtable. That matters beyond taste:
+// the fault handler reads Name() off a thread whose stack has just run into its
+// guard page, and a name that is a member rather than a virtual call cannot be
+// wrong.
 class Thread {
 public:
+    using Entry = void (*)(void* InArgument);
+
     Thread() = default;
-    virtual ~Thread() = default;
+    Thread(const char* InName, Entry InEntry, void* InArgument = nullptr)
+        : m_Name(InName), m_Entry(InEntry), m_Argument(InArgument) {}
 
     // Copying a thread would duplicate a stack that contains absolute pointers
     // into itself, so it is not allowed.
@@ -18,18 +26,21 @@ public:
     Thread& operator=(const Thread&) = delete;
     Thread& operator=(Thread&&) = delete;
 
-    /// Reported when a fault has to say which thread caused it.
-    virtual const char* Name() const { return "thread"; }
-
-    /// The thread body. The default implementation returns immediately, which
-    /// is only valid because Kickoff catches that case.
-    virtual void Action();
+    const char* Name() const { return m_Name; }
 
     /// Maps a stack and lays out the first context. Idempotent, and separate
     /// from the constructor because static threads exist before the allocators
     /// they need.
     void Prepare();
+
+    /// Same, for a thread that was default constructed. The per core idle
+    /// threads live in an array and cannot carry constructor arguments.
+    void Prepare(const char* InName, Entry InEntry, void* InArgument = nullptr);
+
     bool IsPrepared() const { return m_StackTop != 0; }
+
+    /// Where interrupts and system calls taken in ring 3 land.
+    uintptr_t StackTop() const { return m_StackTop; }
 
     /// Activates this thread on the calling core, abandoning the current stack.
     /// Used once per core to leave the boot stack.
@@ -50,10 +61,14 @@ public:
 private:
     /// First thing a new thread executes. It exists because a thread starts by
     /// returning into code rather than being called, so there has to be
-    /// something that turns the raw entry into a virtual Action() call.
+    /// something that turns the raw entry into a call.
     [[noreturn]] static void Kickoff(uintptr_t InThread, uintptr_t InParam2, uintptr_t InParam3);
 
-    Context m_Context;
+    const char* m_Name = "thread";
+    Entry m_Entry = nullptr;
+    void* m_Argument = nullptr;
+
+    Context m_Context{};
     bool m_Dying = false;
     uintptr_t m_StackTop = 0;
 };

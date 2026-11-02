@@ -15,20 +15,17 @@ uint64_t s_Shared = 0;
 
 Semaphore s_Finished(0);
 
-class IncrementThread : public Thread {
-public:
-    void Action() override {
-        for (unsigned round = 0; round < INCREMENTS; round++) {
-            Guarded guard = Guard::Enter();
-            s_Shared++;
-        }
-
+void Increment(void* InUnused) {
+    for (unsigned round = 0; round < INCREMENTS; round++) {
         Guarded guard = Guard::Enter();
-        s_Finished.V(guard.Vault());
+        s_Shared++;
     }
-};
 
-IncrementThread s_Workers[WORKER_COUNT];
+    Guarded guard = Guard::Enter();
+    s_Finished.V(guard.Vault());
+}
+
+Thread s_Workers[WORKER_COUNT] = {{"guard increment", Increment}, {"guard increment", Increment}};
 
 }  // namespace
 

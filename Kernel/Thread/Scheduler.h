@@ -3,7 +3,6 @@
 #include "Config.h"
 #include "Lib/Queue.h"
 #include "Thread/Dispatcher.h"
-#include "Thread/IdleThread.h"
 #include "Thread/Thread.h"
 
 // Round-robin scheduler over one global ready queue.

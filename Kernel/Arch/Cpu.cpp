@@ -2,6 +2,7 @@
 #include "Arch/Apic.h"
 #include "Arch/Gdt.h"
 #include "Arch/LocalApic.h"
+#include "Arch/Syscall.h"
 #include "Debug/Assert.h"
 
 // Boot stacks, handed out by Boot/Entry.asm before any C++ runs.
@@ -48,6 +49,7 @@ void Initialize() {
     const unsigned id = GetId();
     LocalApic::Initialize(Apic::GetLogicalApicId(id));
     Gdt::LoadTaskRegister(id);
+    Syscall::Initialize(id);
     s_CoreOnline[id] = true;
 }
 

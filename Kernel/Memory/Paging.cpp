@@ -32,6 +32,7 @@ namespace Paging {
 
 constexpr uint64_t PRESENT = 1ULL << 0;
 constexpr uint64_t WRITABLE = 1ULL << 1;
+constexpr uint64_t USER = 1ULL << 2;
 constexpr uint64_t CACHE_DISABLE = 1ULL << 4;
 constexpr uint64_t LARGE = 1ULL << 7;
 constexpr uint64_t NO_EXECUTE = 1ULL << 63;
@@ -72,7 +73,7 @@ static uintptr_t AllocateTable() {
 }
 
 /// Walks down to InLevel, creating the tables it passes through.
-static uint64_t* Descend(uintptr_t InVirtual, unsigned InLevel) {
+static uint64_t* Descend(uintptr_t InVirtual, unsigned InLevel, uint64_t InTableFlags) {
     uint64_t* table = TableAt(s_Root);
 
     for (unsigned level = TOP_LEVEL; level > InLevel; level--) {
@@ -88,13 +89,19 @@ static uint64_t* Descend(uintptr_t InVirtual, unsigned InLevel) {
             entry = created | PRESENT | WRITABLE;
         }
 
+        // A table on the way to a user page may already exist because a kernel
+        // page shares it -- the low identity map and the user image both live
+        // under PML4 entry 0. Opening it up costs nothing, because the leaf is
+        // still what decides.
+        entry |= InTableFlags;
+
         table = TableAt(entry & ADDRESS_MASK);
     }
 
     return table;
 }
 
-static uint64_t FlagsFor(Access InAccess, Caching InCaching) {
+static uint64_t FlagsFor(Access InAccess, Privilege InPrivilege, Caching InCaching) {
     uint64_t flags = PRESENT;
 
     if (InAccess == Access::READ_WRITE) {
@@ -103,6 +110,9 @@ static uint64_t FlagsFor(Access InAccess, Caching InCaching) {
     if (InAccess != Access::READ_EXECUTE && s_NoExecuteAvailable) {
         flags |= NO_EXECUTE;
     }
+    if (InPrivilege == Privilege::USER) {
+        flags |= USER;
+    }
     if (InCaching == Caching::DISABLED) {
         flags |= CACHE_DISABLE;
     }
@@ -110,34 +120,47 @@ static uint64_t FlagsFor(Access InAccess, Caching InCaching) {
     return flags;
 }
 
-static const uint64_t* FindEntry(uintptr_t InVirtual) {
+/// What the CPU actually grants for an address: present, writable and user are
+/// the AND of every level on the way down, no-execute is the OR. Returns 0 when
+/// nothing is mapped, and otherwise carries the leaf's frame in ADDRESS_MASK.
+static uint64_t Effective(uintptr_t InVirtual) {
     const uint64_t* table = TableAt(s_Root);
+    uint64_t granted = PRESENT | WRITABLE | USER;
+    uint64_t noExecute = 0;
 
     for (unsigned level = TOP_LEVEL; level > LEAF_LEVEL; level--) {
         const uint64_t entry = table[IndexAt(InVirtual, level)];
         if ((entry & PRESENT) == 0 || (entry & LARGE) != 0) {
-            return nullptr;
+            return 0;
         }
+        granted &= entry;
+        noExecute |= entry & NO_EXECUTE;
         table = TableAt(entry & ADDRESS_MASK);
     }
 
-    const uint64_t* entry = &table[IndexAt(InVirtual, LEAF_LEVEL)];
-    return (*entry & PRESENT) != 0 ? entry : nullptr;
+    const uint64_t leaf = table[IndexAt(InVirtual, LEAF_LEVEL)];
+    if ((leaf & PRESENT) == 0) {
+        return 0;
+    }
+    noExecute |= leaf & NO_EXECUTE;
+
+    return (granted & leaf) | noExecute | (leaf & ADDRESS_MASK);
 }
 
 bool Map(uintptr_t InVirtual, uintptr_t InPhysical, size_t InSize, Access InAccess,
-         Caching InCaching) {
+         Privilege InPrivilege, Caching InCaching) {
     // Stacks are mapped long after boot, from whichever core needs one.
     Cpu::Interrupt::Guard interruptGuard;
     SpinLock::Scope lockGuard(s_Lock);
 
-    const uint64_t flags = FlagsFor(InAccess, InCaching);
+    const uint64_t flags = FlagsFor(InAccess, InPrivilege, InCaching);
+    const uint64_t tableFlags = InPrivilege == Privilege::USER ? USER : 0;
     const uintptr_t end = InVirtual + InSize;
 
     uintptr_t source = InPhysical & ~(PAGE_SIZE - 1);
 
     for (uintptr_t page = InVirtual & ~(PAGE_SIZE - 1); page < end; page += PAGE_SIZE) {
-        uint64_t* table = Descend(page, LEAF_LEVEL);
+        uint64_t* table = Descend(page, LEAF_LEVEL, tableFlags);
         if (table == nullptr) {
             return false;
         }
@@ -150,21 +173,28 @@ bool Map(uintptr_t InVirtual, uintptr_t InPhysical, size_t InSize, Access InAcce
 }
 
 uintptr_t Translate(uintptr_t InVirtual) {
-    const uint64_t* entry = FindEntry(InVirtual);
-    if (entry == nullptr) {
+    const uint64_t entry = Effective(InVirtual);
+    if (entry == 0) {
         return 0;
     }
-    return (*entry & ADDRESS_MASK) | (InVirtual & (PAGE_SIZE - 1));
+    return (entry & ADDRESS_MASK) | (InVirtual & (PAGE_SIZE - 1));
 }
 
 bool IsWritable(uintptr_t InVirtual) {
-    const uint64_t* entry = FindEntry(InVirtual);
-    return entry != nullptr && (*entry & WRITABLE) != 0;
+    return (Effective(InVirtual) & WRITABLE) != 0;
 }
 
 bool IsExecutable(uintptr_t InVirtual) {
-    const uint64_t* entry = FindEntry(InVirtual);
-    return entry != nullptr && (!s_NoExecuteAvailable || (*entry & NO_EXECUTE) == 0);
+    const uint64_t entry = Effective(InVirtual);
+    return entry != 0 && (!s_NoExecuteAvailable || (entry & NO_EXECUTE) == 0);
+}
+
+bool IsUserReadable(uintptr_t InVirtual) {
+    return (Effective(InVirtual) & USER) != 0;
+}
+
+bool IsUserWritable(uintptr_t InVirtual) {
+    return (Effective(InVirtual) & (USER | WRITABLE)) == (USER | WRITABLE);
 }
 
 static void MapIdentity(uintptr_t InStart, uintptr_t InEnd, Access InAccess,
@@ -172,7 +202,7 @@ static void MapIdentity(uintptr_t InStart, uintptr_t InEnd, Access InAccess,
     if (InEnd <= InStart) {
         return;
     }
-    if (!Map(InStart, InStart, InEnd - InStart, InAccess, InCaching)) {
+    if (!Map(InStart, InStart, InEnd - InStart, InAccess, Privilege::KERNEL, InCaching)) {
         PANIC("Not enough memory for the kernel page tables");
     }
 }

@@ -12,12 +12,25 @@
 namespace Gdt {
 
 /// Selector values, i.e. byte offsets into the long mode table.
+///
+/// The order is not free. syscall and sysret read no descriptor at all: they
+/// compute their selectors from fixed offsets off STAR, which forces the user
+/// entries to sit at base, base + 8 and base + 16 in exactly that order.
 enum Selector : uint16_t {
     NULL_SELECTOR = 0x00,
     KERNEL_CODE = 0x08,
     KERNEL_DATA = 0x10,
-    FIRST_TSS = 0x18,  ///< Core n uses FIRST_TSS + n * 16
+    USER_CODE32 = 0x18,  ///< Never used; only sysretl would load it
+    USER_DATA = 0x20,
+    USER_CODE = 0x28,
+    FIRST_TSS = 0x30,  ///< Core n uses FIRST_TSS + n * 16
 };
+
+/// Requested privilege level, or'd into a selector handed to ring 3.
+constexpr uint16_t RING3 = 3;
+
+/// Descriptors ahead of the task state segments.
+constexpr size_t FIXED_DESCRIPTORS = FIRST_TSS / sizeof(uint64_t);
 
 enum class Granularity : uint64_t {
     BYTES = 0,
@@ -119,5 +132,10 @@ void Load();
 /// Fills in this core's TSS descriptor, points IST1 at its emergency stack and
 /// loads the task register.
 void LoadTaskRegister(unsigned InCoreId);
+
+/// Stack an interrupt taken in ring 3 switches to. Follows the running thread,
+/// so the dispatcher has to update it on every switch.
+void SetKernelStack(unsigned InCoreId, uintptr_t InStackTop);
+uintptr_t GetKernelStack(unsigned InCoreId);
 
 }  // namespace Gdt

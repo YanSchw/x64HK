@@ -5,12 +5,16 @@
 
 namespace Gdt {
 
-// Long mode table. Slots 3 and up hold one 16-byte TSS descriptor per core, so
-// the array is declared as plain 8-byte entries and written through below.
-alignas(16) constinit static SegmentDescriptor s_LongMode[3 + 2 * Config::MAX_CORES] = {
+// Long mode table. The slots after the fixed ones hold one 16-byte TSS
+// descriptor per core, so the array is declared as plain 8-byte entries and
+// written through below.
+alignas(16) constinit static SegmentDescriptor s_LongMode[FIXED_DESCRIPTORS + 2 * Config::MAX_CORES] = {
     SegmentDescriptor::Null(),
     SegmentDescriptor::Segment64(true, 0),
     SegmentDescriptor::Segment64(false, 0),
+    SegmentDescriptor::Segment(0, 0xffffffff, true, 3, Size::BIT32),
+    SegmentDescriptor::Segment64(false, 3),
+    SegmentDescriptor::Segment64(true, 3),
 };
 
 extern "C" constexpr Pointer GdtLongModePointer(s_LongMode);
@@ -37,7 +41,7 @@ static void WriteTssDescriptor(unsigned InCoreId, const TaskStateSegment& InTss)
                          (((base >> 24) & 0xff) << 56);
     const uint64_t high = base >> 32;
 
-    SegmentDescriptor* slot = &s_LongMode[3 + 2 * InCoreId];
+    SegmentDescriptor* slot = &s_LongMode[FIXED_DESCRIPTORS + 2 * InCoreId];
     slot[0].Value = low;
     slot[1].Value = high;
 }
@@ -60,6 +64,14 @@ void LoadTaskRegister(unsigned InCoreId) {
 
     const uint16_t selector = FIRST_TSS + static_cast<uint16_t>(InCoreId * 16);
     asm volatile("ltr %0" : : "r"(selector) : "memory");
+}
+
+void SetKernelStack(unsigned InCoreId, uintptr_t InStackTop) {
+    s_TaskState[InCoreId].Rsp[0] = InStackTop;
+}
+
+uintptr_t GetKernelStack(unsigned InCoreId) {
+    return s_TaskState[InCoreId].Rsp[0];
 }
 
 }  // namespace Gdt

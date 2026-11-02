@@ -21,6 +21,11 @@ struct Vault {
     class Scheduler Scheduler;
     class Bellringer Bellringer;
     TextStream Output;
+
+    /// Where the Write system call lands. A window of its own, because a ring 3
+    /// program writes a stream while the kernel's own threads paint fixed rows.
+    TextStream UserOutput;
+
     RingBuffer<Key, Config::KEY_BUFFER_SIZE> Keys;
     class Semaphore KeysAvailable;
 };

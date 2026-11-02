@@ -1,8 +1,9 @@
 # x64HK
 
 An x86-64 hobby kernel. It boots from a legacy BIOS through GRUB, switches to
-long mode, brings up every CPU core, and runs preemptive kernel threads on top
-of a prologue/epilogue interrupt model.
+long mode, brings up every CPU core, runs preemptive kernel threads on top of a
+prologue/epilogue interrupt model, and drops into ring 3 to run a user program
+against a documented system call ABI.
 
 Written in freestanding C++23 and NASM, with no libc and no external
 dependencies.
@@ -21,6 +22,7 @@ make qemu
 | Target | What it does |
 | --- | --- |
 | `make` | Build `Build/Kernel.elf` |
+| `make user` | Build just the ring 3 demo program |
 | `make qemu` | Boot it in QEMU, with a GDB stub listening |
 | `make iso` | Build `Build/x64HK.iso`, bootable and USB-flashable |
 | `make qemu-iso` | Boot that ISO instead of the raw kernel |
@@ -106,9 +108,36 @@ make connect-gdb    # in another terminal
 32-bit `Kernel.elf` that boot loaders consume is the same image with the ELF
 header rewritten.
 
+## User mode
+
+The kernel ends up in ring 3 with a program of its own. `User/Hello.c` is a
+freestanding C program that knows nothing about the kernel beyond
+[`ABI/SPECIFICATION.md`](ABI/SPECIFICATION.md): it links against `ABI/C`, is
+embedded in the kernel image, and every character it puts on the screen goes
+through a `syscall`.
+
+```
+ring 3   User/Hello.c  ->  ABI/C/HK.c  ->  syscall
+ring 0   Arch/Syscall.asm  ->  SyscallDispatch  ->  Exit / Write / Yield / GetKey
+```
+
+Four calls, `rax` for the number and `rdi`/`rsi`/`rdx` for the arguments, a
+negative return meaning failure. The keyboard feeds `GetKey` rather than a
+kernel thread, so typing in QEMU is served by a user process.
+
+The header is shared by both sides, which is why the kernel carries
+`static_assert`s that its own `Key::ScanCode` still matches `hk_scancode`.
+
+A fault in ring 3 kills the task and leaves the kernel running; the same fault
+in ring 0 still panics. The two are told apart by the privilege level in the
+pushed `cs`.
+
 ## Source layout
 
 ```
+ABI/             the ring 3 contract: SPECIFICATION.md and the C/C++ binding
+User/            the demo program that runs against it
+
 Kernel/
   Main.cpp       demo threads, screen layout, per-core debug streams
   Config.h       every tunable in one place
@@ -117,10 +146,11 @@ Kernel/
   Boot/          Multiboot headers and parsing, entry, long mode, SMP startup
   Arch/          CPU, GDT/IDT/TSS, ACPI, APIC, PIT, CMOS, CGA, serial, context
   Interrupt/     Guard, epilogues, IDT handlers
-  Thread/        Thread, Dispatcher, Scheduler, IdleThread
+  Thread/        Thread, Dispatcher, Scheduler
   Sync/          SpinLock, TicketLock, Semaphore, Bellringer
   Device/        PS/2 keyboard and key decoding, text and serial streams
   Memory/        physical frame allocator, page tables, buddy heap
+  User/          ELF loading, ring 3 tasks, the embedded demo program
   Lib/           Queue, RingBuffer, PerCore, OutputStream, string functions
   Debug/         assertions, panic, per-core debug output
   Compiler/      global constructors, operator new/delete
@@ -141,6 +171,14 @@ runs the suites: the pure ones on the bootstrap core before threading, the rest
 on a thread once the scheduler is up. The kernel reports through QEMU's
 `isa-debug-exit` device, so a failed check, a failed `ASSERT` or a panic all
 come back as a non-zero exit status.
+
+The user mode suite is the odd one out. Every rule ring 3 has to obey gets
+checked by breaking it: `Kernel/Test/UserProbes.asm` holds fifteen short
+programs — `cli`, `hlt`, `out`, `int`, a read of kernel memory, a write to
+their own code, a jump into their own stack — which the suite maps into user
+pages, runs as tasks, and then asks how each one died. Anything that must fault
+is followed by `ud2`, so an instruction that wrongly succeeds reports a
+different fault instead of passing quietly.
 
 ## Configuration
 
@@ -179,7 +217,10 @@ Four spaces for indentation, `Tools/Untabify.sh --check` fails if a tab creeps b
 - No UEFI
 - Page tables are 4 KiB throughout. No large pages, which costs about 0.2% of
   RAM in tables
-- No user mode — everything runs in ring 0 and the GDT has no ring 3 segments
+- One address space. Ring 3 cannot reach the kernel, but two user tasks can
+  reach each other — that needs a set of page tables per task
+- No `fork`, no `exec`, no filesystem: the one user program is linked into the
+  kernel image
 - No FPU or SSE, so context switches never have to save vector state
 - One I/O APIC and flat logical APIC addressing, which caps `MAX_CORES` at 8
 - No filesystem, no storage driver, no network

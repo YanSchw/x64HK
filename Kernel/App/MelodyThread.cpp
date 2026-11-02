@@ -2,12 +2,21 @@
 #include "Arch/Pit.h"
 #include "Interrupt/Guard.h"
 
-void MelodyThread::Action() {
-    static constexpr Note MELODY[] = {
-        {262, 300}, {0, 60},   {330, 300}, {0, 60},  {392, 300}, {0, 60},
-        {523, 450}, {0, 100},  {392, 300}, {0, 60},  {523, 600}, {0, 1500},
-    };
+namespace {
 
+struct Note {
+    uint32_t Frequency;  ///< Hz, 0 for a rest
+    unsigned Milliseconds;
+};
+
+constexpr Note MELODY[] = {
+    {262, 300}, {0, 60},  {330, 300}, {0, 60},  {392, 300}, {0, 60},
+    {523, 450}, {0, 100}, {392, 300}, {0, 60},  {523, 600}, {0, 1500},
+};
+
+}  // namespace
+
+void MelodyThread(void* InUnused) {
     while (true) {
         continue;  // TODO: Remove this when the melody is ready to be played.
 

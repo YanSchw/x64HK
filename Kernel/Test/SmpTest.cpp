@@ -24,24 +24,23 @@ uint64_t s_CoresSeen = 0;
 /// map, and show up here as a hole.
 uint64_t s_CoresOnKernelTables = 0;
 
-class SampleThread : public Thread {
-public:
-    void Action() override {
-        for (unsigned round = 0; round < SAMPLES; round++) {
-            const uint64_t bit = uint64_t{1} << Cpu::GetId();
-            __atomic_or_fetch(&s_CoresSeen, bit, __ATOMIC_RELAXED);
+void Sample(void* InUnused) {
+    for (unsigned round = 0; round < SAMPLES; round++) {
+        const uint64_t bit = uint64_t{1} << Cpu::GetId();
+        __atomic_or_fetch(&s_CoresSeen, bit, __ATOMIC_RELAXED);
 
-            if ((Cpu::CR3::Read() & ~uintptr_t{0xfff}) == KernelPageTableRoot) {
-                __atomic_or_fetch(&s_CoresOnKernelTables, bit, __ATOMIC_RELAXED);
-            }
+        if ((Cpu::CR3::Read() & ~uintptr_t{0xfff}) == KernelPageTableRoot) {
+            __atomic_or_fetch(&s_CoresOnKernelTables, bit, __ATOMIC_RELAXED);
         }
-
-        Guarded guard = Guard::Enter();
-        s_Finished.V(guard.Vault());
     }
-};
 
-SampleThread s_Workers[WORKER_COUNT];
+    Guarded guard = Guard::Enter();
+    s_Finished.V(guard.Vault());
+}
+
+Thread s_Workers[WORKER_COUNT] = {
+    {"smp sample", Sample}, {"smp sample", Sample}, {"smp sample", Sample}, {"smp sample", Sample},
+};
 
 unsigned CountBits(uint64_t InValue) {
     unsigned count = 0;
@@ -58,7 +57,7 @@ void Test::RunSmpSuite() {
 
     {
         Guarded guard = Guard::Enter();
-        for (SampleThread& worker : s_Workers) {
+        for (Thread& worker : s_Workers) {
             guard.Vault().Scheduler.Ready(&worker);
         }
     }

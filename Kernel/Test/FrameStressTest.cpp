@@ -19,49 +19,49 @@ uint64_t Token(unsigned InWorker, unsigned InRound, size_t InSlot) {
     return (uint64_t{InWorker} << 40) | (uint64_t{InRound} << 8) | InSlot;
 }
 
-class StressThread : public Thread {
-public:
-    explicit StressThread(unsigned InIndex) : m_Index(InIndex) {}
+void RunRound(unsigned InWorker, unsigned InRound) {
+    uintptr_t frames[FRAMES_PER_ROUND] = {};
 
-    void Action() override {
-        for (unsigned round = 0; round < ROUNDS; round++) {
-            RunRound(round);
+    for (size_t slot = 0; slot < FRAMES_PER_ROUND; slot++) {
+        frames[slot] = Frame::Allocate();
+        if (frames[slot] == 0) {
+            s_Exhausted[InWorker]++;
+            continue;
         }
-
-        Guarded guard = Guard::Enter();
-        s_Finished.V(guard.Vault());
+        *reinterpret_cast<volatile uint64_t*>(Paging::ToVirtual(frames[slot])) =
+            Token(InWorker, InRound, slot);
     }
 
-private:
-    void RunRound(unsigned InRound) {
-        uintptr_t frames[FRAMES_PER_ROUND] = {};
-
-        for (size_t slot = 0; slot < FRAMES_PER_ROUND; slot++) {
-            frames[slot] = Frame::Allocate();
-            if (frames[slot] == 0) {
-                s_Exhausted[m_Index]++;
-                continue;
-            }
-            *reinterpret_cast<volatile uint64_t*>(Paging::ToVirtual(frames[slot])) =
-                Token(m_Index, InRound, slot);
+    for (size_t slot = 0; slot < FRAMES_PER_ROUND; slot++) {
+        if (frames[slot] == 0) {
+            continue;
         }
-
-        for (size_t slot = 0; slot < FRAMES_PER_ROUND; slot++) {
-            if (frames[slot] == 0) {
-                continue;
-            }
-            if (*reinterpret_cast<volatile uint64_t*>(Paging::ToVirtual(frames[slot])) !=
-                Token(m_Index, InRound, slot)) {
-                s_Aliased[m_Index]++;
-            }
-            Frame::Free(frames[slot]);
+        if (*reinterpret_cast<volatile uint64_t*>(Paging::ToVirtual(frames[slot])) !=
+            Token(InWorker, InRound, slot)) {
+            s_Aliased[InWorker]++;
         }
+        Frame::Free(frames[slot]);
+    }
+}
+
+void Stress(void* InIndex) {
+    const unsigned index = *static_cast<const unsigned*>(InIndex);
+
+    for (unsigned round = 0; round < ROUNDS; round++) {
+        RunRound(index, round);
     }
 
-    unsigned m_Index;
+    Guarded guard = Guard::Enter();
+    s_Finished.V(guard.Vault());
+}
+
+unsigned s_Index[WORKER_COUNT] = {0, 1, 2};
+
+Thread s_Workers[WORKER_COUNT] = {
+    {"frame stress", Stress, &s_Index[0]},
+    {"frame stress", Stress, &s_Index[1]},
+    {"frame stress", Stress, &s_Index[2]},
 };
-
-StressThread s_Workers[WORKER_COUNT] = {StressThread(0), StressThread(1), StressThread(2)};
 
 }  // namespace
 
@@ -69,7 +69,7 @@ void Test::RunFrameStressSuite() {
     Begin("Frame stress");
 
     // Readying a thread maps it a stack, so the baseline has to come after.
-    for (StressThread& worker : s_Workers) {
+    for (Thread& worker : s_Workers) {
         worker.Prepare();
     }
 
@@ -77,7 +77,7 @@ void Test::RunFrameStressSuite() {
 
     {
         Guarded guard = Guard::Enter();
-        for (StressThread& worker : s_Workers) {
+        for (Thread& worker : s_Workers) {
             guard.Vault().Scheduler.Ready(&worker);
         }
     }

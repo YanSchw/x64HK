@@ -66,6 +66,7 @@ ifeq ($(TEST),1)
 	CXXFLAGS += -DTEST
 else
 	CPP_SOURCES := $(filter-out $(SRC_DIR)/Test/%,$(CPP_SOURCES))
+	ASM_SOURCES := $(filter-out $(SRC_DIR)/Test/%,$(ASM_SOURCES))
 endif
 
 CPP_OBJECTS := $(addprefix $(BUILD_DIR)/,$(CPP_SOURCES:.cpp=.o))

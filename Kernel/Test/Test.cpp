@@ -13,24 +13,20 @@ unsigned s_Failures = 0;
 unsigned s_Suites = 0;
 
 /// Runs the suites that need to be on a thread, then reports for everyone.
-class RunnerThread : public Thread {
-public:
-    const char* Name() const override { return "test runner"; }
-
-    void Action() override {
+void RunSuites(void* InUnused) {
 #ifdef TEST_OVERFLOW
-        // The boot stack has no guard page, so this only means anything here.
-        Test::RunStackOverflowSuite();
+    // The boot stack has no guard page, so this only means anything here.
+    Test::RunStackOverflowSuite();
 #endif
-        Test::RunSmpSuite();
-        Test::RunFrameStressSuite();
-        Test::RunSemaphoreSuite();
-        Test::RunGuardSuite();
-        Test::Finish();
-    }
-};
+    Test::RunSmpSuite();
+    Test::RunFrameStressSuite();
+    Test::RunSemaphoreSuite();
+    Test::RunGuardSuite();
+    Test::RunUserModeSuite();
+    Test::Finish();
+}
 
-RunnerThread s_Runner;
+Thread s_Runner("test runner", RunSuites);
 
 }  // namespace
 

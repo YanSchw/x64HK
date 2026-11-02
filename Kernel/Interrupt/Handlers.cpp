@@ -10,6 +10,9 @@
 #include "Memory/KernelStack.h"
 #include "Debug/Output.h"
 #include "Debug/Panic.h"
+#include "Lib/PerCore.h"
+#include "User/Task.h"
+#include "ABI/C/HK.h"
 
 // Every handler here carries the `interrupt` attribute: the compiler then saves
 // and restores all registers it touches and returns with iretq, which is what
@@ -25,17 +28,74 @@ static void PrintContext(const InterruptContext* InContext) {
         << InContext->Sp << "  flags " << InContext->Flags << Dec << EndLine;
 }
 
+// --- Faults in ring 3 -------------------------------------------------------
+//
+// A fault in ring 3 kills the task; the same fault in ring 0 is a kernel bug
+// and panics. The pushed code selector is what tells them apart -- it is the
+// privilege level at the instant of the fault, which is exactly the question.
+// Nothing else in the frame can be trusted, because a user program controls all
+// of it.
+//
+// The task cannot be taken down from here: a handler is a prologue, and Exit
+// needs the Guard. So the frame is rewritten to return into the kernel instead
+// of into the faulting instruction, and the work happens at thread level on the
+// stack the thread already owns.
+
+struct Death {
+    const char* Reason;
+    int Status;
+};
+
+static PerCore<Death> s_Death;
+
+/// Reached by the iretq at the end of the handler, on the faulting thread's own
+/// kernel stack and with interrupts on. Takes no arguments, because the
+/// registers it is entered with are the user's.
+[[noreturn]] static void TerminateFaultedTask() {
+    const Death& death = s_Death.Get();
+    User::Terminate(death.Reason, death.Status);
+}
+
+static bool KillUserTask(InterruptContext* InOutContext, const char* InReason, Vector InVector) {
+    if ((InOutContext->Cs & 3) != 3) {
+        return false;
+    }
+
+    const unsigned core = Cpu::GetId();
+    s_Death[core] = {InReason, HK_EXIT_FAULT_BASE + static_cast<int>(ToUnderlying(InVector))};
+
+    InOutContext->Ip = reinterpret_cast<uintptr_t>(&TerminateFaultedTask);
+    InOutContext->Cs = Gdt::KERNEL_CODE;
+    InOutContext->Ss = Gdt::KERNEL_DATA;
+
+    // Bit 1 is reserved and reads as one; IOPL stays 0.
+    InOutContext->Flags = Cpu::Interrupt::FLAG_ENABLE | 0x2;
+
+    // iretq always pops ss:rsp in 64-bit mode, even returning to ring 0, so the
+    // stack switch comes for free. The -8 is the return address a call would
+    // have pushed, without which the callee sees the wrong alignment.
+    InOutContext->Sp = Gdt::GetKernelStack(core) - 8;
+
+    return true;
+}
+
 // --- Exceptions -------------------------------------------------------------
 
 [[gnu::interrupt]] static void HandleDivideError(InterruptContext* InContext) {
     DBG << "Divide error" << EndLine;
     PrintContext(InContext);
+    if (KillUserTask(InContext, "divided by zero", Vector::DIVIDE_ERROR)) {
+        return;
+    }
     PANIC("Divide error");
 }
 
 [[gnu::interrupt]] static void HandleInvalidOpcode(InterruptContext* InContext) {
     DBG << "Invalid opcode" << EndLine;
     PrintContext(InContext);
+    if (KillUserTask(InContext, "executed an invalid opcode", Vector::INVALID_OPCODE)) {
+        return;
+    }
     PANIC("Invalid opcode");
 }
 
@@ -62,6 +122,9 @@ static void PrintContext(const InterruptContext* InContext) {
 [[gnu::interrupt]] static void HandleStackSegmentFault(InterruptContext* InContext, uint64_t InError) {
     DBG << "Stack segment fault, error " << Hex << InError << Dec << EndLine;
     PrintContext(InContext);
+    if (KillUserTask(InContext, "faulted on its stack segment", Vector::STACK_SEGMENT_FAULT)) {
+        return;
+    }
     PANIC("Stack segment fault");
 }
 
@@ -69,6 +132,13 @@ static void PrintContext(const InterruptContext* InContext) {
                                                             uint64_t InError) {
     DBG << "General protection fault, error " << Hex << InError << Dec << EndLine;
     PrintContext(InContext);
+    // Everything ring 3 is not allowed to do arrives here: a privileged
+    // instruction, a port access the TSS bitmap does not permit, and any `int`
+    // at all, because every gate in the IDT has DPL 0.
+    if (KillUserTask(InContext, "attempted a privileged operation",
+                     Vector::GENERAL_PROTECTION_FAULT)) {
+        return;
+    }
     PANIC("General protection fault");
 }
 
@@ -90,6 +160,9 @@ static void PrintContext(const InterruptContext* InContext) {
     DBG << "Page fault at " << reinterpret_cast<void*>(address) << ' ' << PageFaultError(InError)
         << EndLine;
     PrintContext(InContext);
+    if (KillUserTask(InContext, "touched memory it does not own", Vector::PAGE_FAULT)) {
+        return;
+    }
     PANIC("Page fault");
 }
 

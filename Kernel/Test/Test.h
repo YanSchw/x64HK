@@ -49,6 +49,7 @@ void RunKernelStackSuite();
 void RunStackOverflowSuite();
 #endif
 void RunSmpSuite();
+void RunUserModeSuite();
 void RunSemaphoreSuite();
 void RunGuardSuite();
 

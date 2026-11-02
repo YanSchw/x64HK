@@ -12,20 +12,17 @@ Semaphore s_Finished(0);
 
 /// Hands SIGNAL_COUNT tokens over and then reports that it is done, so the
 /// runner can tell "the producer finished" from "the producer is slow".
-class SignalThread : public Thread {
-public:
-    void Action() override {
-        for (unsigned round = 0; round < SIGNAL_COUNT; round++) {
-            Guarded guard = Guard::Enter();
-            s_Signal.V(guard.Vault());
-        }
-
+void Signal(void* InUnused) {
+    for (unsigned round = 0; round < SIGNAL_COUNT; round++) {
         Guarded guard = Guard::Enter();
-        s_Finished.V(guard.Vault());
+        s_Signal.V(guard.Vault());
     }
-};
 
-SignalThread s_SignalThread;
+    Guarded guard = Guard::Enter();
+    s_Finished.V(guard.Vault());
+}
+
+Thread s_SignalThread("semaphore signal", Signal);
 
 }  // namespace
 

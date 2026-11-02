@@ -6,7 +6,7 @@
 #include "Sync/TicketLock.h"
 #include "Debug/Assert.h"
 
-Vault::Vault() : Output(0, Cga::COLUMNS, 0, 4, false) {}
+Vault::Vault() : Output(0, Cga::COLUMNS, 2, 4, false), UserOutput(0, Cga::COLUMNS, 0, 2, false) {}
 
 static Vault s_Vault;
 

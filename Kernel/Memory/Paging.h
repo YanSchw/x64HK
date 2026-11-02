@@ -18,6 +18,11 @@ enum class Caching : uint8_t {
     DISABLED,  ///< Memory mapped device registers must not be cached.
 };
 
+enum class Privilege : uint8_t {
+    KERNEL,
+    USER,  ///< Reachable from ring 3
+};
+
 /// Every frame is reachable at this offset, so a physical address never needs a
 /// mapping of its own.
 inline uintptr_t ToVirtual(uintptr_t InPhysical) {
@@ -31,13 +36,17 @@ inline uintptr_t ToPhysical(uintptr_t InVirtual) {
 void Initialize();
 
 bool Map(uintptr_t InVirtual, uintptr_t InPhysical, size_t InSize, Access InAccess,
-         Caching InCaching = Caching::NORMAL);
+         Privilege InPrivilege = Privilege::KERNEL, Caching InCaching = Caching::NORMAL);
 
 /// Physical address backing InVirtual, or 0 when nothing is mapped there.
 uintptr_t Translate(uintptr_t InVirtual);
 
 bool IsWritable(uintptr_t InVirtual);
 bool IsExecutable(uintptr_t InVirtual);
+
+/// Whether ring 3 may read, or read and write, the page holding InVirtual.
+bool IsUserReadable(uintptr_t InVirtual);
+bool IsUserWritable(uintptr_t InVirtual);
 
 void Dump();
 

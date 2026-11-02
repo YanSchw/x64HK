@@ -3,7 +3,6 @@
 #include "Boot/SmpBoot.h"
 #include "Boot/Startup.h"
 #include "App/CounterThread.h"
-#include "App/KeyboardThread.h"
 #include "App/MelodyThread.h"
 #include "Arch/Cga.h"
 #include "Arch/Cpu.h"
@@ -16,9 +15,11 @@
 #include "Device/SerialStream.h"
 #include "Device/TextStream.h"
 #include "Interrupt/Guard.h"
+#include "Thread/Thread.h"
 #include "Memory/Frame.h"
 #include "Memory/Heap.h"
 #include "Memory/Paging.h"
+#include "User/Task.h"
 #ifdef TEST
 #include "Test/Test.h"
 #endif
@@ -37,10 +38,34 @@ static SerialStream s_Serial;
 /// survives a screen full of scrolling and can be captured from the host.
 static CopyStream s_BootstrapOutput(&s_DebugWindow[0], &s_Serial);
 
-static CounterThread s_CounterA("A:", Cga::Attribute(Cga::Color::WHITE, Cga::Color::BLUE), 1);
-static CounterThread s_CounterB("B:", Cga::Attribute(Cga::Color::WHITE, Cga::Color::GREEN), 2);
-static KeyboardThread s_Keyboard;
-static MelodyThread s_Melody;
+static Counter s_CounterA{"A:", Cga::Attribute(Cga::Color::WHITE, Cga::Color::BLUE), 0};
+static Counter s_CounterB{"B:", Cga::Attribute(Cga::Color::WHITE, Cga::Color::GREEN), 1};
+
+static Thread s_Threads[] = {
+    {"counter A", CounterThread, &s_CounterA},
+    {"counter B", CounterThread, &s_CounterB},
+    {"melody", MelodyThread},
+};
+
+#ifndef TEST
+
+/// Kernel/User/Program.asm puts the demo program's ELF image between these.
+extern "C" uint8_t UserProgramStart;
+extern "C" uint8_t UserProgramEnd;
+
+static User::Task s_HelloTask;
+static Thread s_HelloThread("hello", User::Run, &s_HelloTask);
+
+/// The keyboard now feeds a ring 3 program rather than a kernel thread, which
+/// is the point of the GetKey system call.
+static void StartUserProgram(Scheduler& InScheduler) {
+    const size_t size = static_cast<size_t>(&UserProgramEnd - &UserProgramStart);
+    if (User::Load("hello", &UserProgramStart, size, s_HelloTask)) {
+        InScheduler.Ready(&s_HelloThread);
+    }
+}
+
+#endif  // TEST
 
 static void RegisterDebugStreams() {
     Debug::SetStream(0, &s_BootstrapOutput);
@@ -79,11 +104,10 @@ extern "C" int Main() {
 #else
     {
         Guarded guard = Guard::Enter();
-        Scheduler& scheduler = guard.Vault().Scheduler;
-        scheduler.Ready(&s_CounterA);
-        scheduler.Ready(&s_CounterB);
-        scheduler.Ready(&s_Keyboard);
-        scheduler.Ready(&s_Melody);
+        for (Thread& thread : s_Threads) {
+            guard.Vault().Scheduler.Ready(&thread);
+        }
+        StartUserProgram(guard.Vault().Scheduler);
     }
 #endif
 

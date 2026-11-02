@@ -8,6 +8,7 @@ SRC_DIR   := Kernel
 LINKER_SCRIPT := $(SRC_DIR)/Boot/Sections.ld
 
 include Tools/Build.mk
+include Tools/User.mk
 include Tools/Image.mk
 include Tools/Qemu.mk
 
