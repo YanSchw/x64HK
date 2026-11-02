@@ -58,7 +58,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends clang lld llvm nasm \
-            qemu-system-x86 grub-pc-bin grub-common xorriso
+            qemu-system-x86 grub-pc-bin grub-common xorriso mtools
 
       # No KVM on a hosted runner, so everything runs under TCG. Tools/RunTests.sh
       # asks for it explicitly and never touches an audio backend, which a runner

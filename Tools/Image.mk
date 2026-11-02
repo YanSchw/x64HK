@@ -32,7 +32,7 @@ $(ISO_FILE): $(ISO_DIR)/boot/Kernel.elf $(ISO_DIR)/boot/grub/grub.cfg
 ifeq (,$(GRUB_MKRESCUE))
 	@echo "grub-mkrescue was not found." >&2
 	@echo "  macOS:  brew install xorriso i686-elf-grub" >&2
-	@echo "  Debian: apt install grub-pc-bin grub-common xorriso" >&2
+	@echo "  Debian: apt install grub-pc-bin grub-common xorriso mtools" >&2
 	@exit 1
 else
 	@echo "ISO   $@"

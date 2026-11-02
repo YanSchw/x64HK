@@ -64,11 +64,12 @@ make iso
 make qemu-iso
 ```
 
-The ISO needs `grub-mkrescue` and `xorriso`:
+The ISO needs `grub-mkrescue` and `xorriso`, plus `mtools` wherever GRUB's EFI
+platform is installed (grub-mkrescue then builds an EFI image as well):
 
 ```bash
 brew install xorriso i686-elf-grub                  # macOS
-apt install grub-pc-bin grub-common xorriso         # Debian
+apt install grub-pc-bin grub-common xorriso mtools  # Debian
 ```
 
 **Multiboot1** exists purely so QEMU's built-in `-kernel` loader can boot the

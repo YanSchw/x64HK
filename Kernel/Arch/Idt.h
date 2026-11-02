@@ -53,18 +53,24 @@ using ReturningHandlerWithError = void (*)(InterruptContext*, uint64_t);
 using DivergingHandler = void (*)(InterruptContext*);
 using DivergingHandlerWithError = void (*)(InterruptContext*, uint64_t);
 
+// The reserved bits are named members on purpose. An unnamed bit-field is not a
+// member, so no constructor ever writes it, and the compiler is free to leave
+// whatever was in the register or stack slot it built the gate in. The CPU does
+// check some of them: a stray bit 4 of the type byte turns an interrupt gate
+// (0xe) into type 0x1e, and the first interrupt through it is a #GP, then a #DF,
+// then a triple fault.
 struct alignas(8) InterruptDescriptor {
     uint16_t AddressLow;
     uint16_t Selector;
     uint8_t Ist : 3;  ///< 0 keeps the current stack, 1..7 selects a TSS IST entry
-    uint8_t : 5;
+    uint8_t Reserved0 : 5 = 0;
     GateType Type : 3;
     uint8_t Size : 1;  ///< Always 1 in long mode
-    uint8_t : 1;
+    uint8_t Reserved1 : 1 = 0;
     PrivilegeLevel Dpl : 2;
     uint8_t Present : 1;
     uint64_t AddressHigh : 48;
-    uint64_t : 0;
+    uint32_t Reserved2 = 0;
 
     InterruptDescriptor() = default;
 
